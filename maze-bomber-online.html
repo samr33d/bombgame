@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAZE BOMBER — ONLINE</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+
+:root {
+  --bg: #07080f;
+  --panel: #0e0f1a;
+  --border: #1e2035;
+  --accent: #ff3c3c;
+  --gold: #ffcc00;
+  --cyan: #00e5ff;
+  --green: #44ff88;
+  --wall-solid: #141420;
+  --wall-top: #1e1e30;
+  --glow-r: rgba(255,60,60,0.5);
+  --glow-c: rgba(0,229,255,0.4);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  font-family: 'Press Start 2P', monospace;
+  color: #fff;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-x: hidden;
+}
+
+body::after {
+  content:'';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.04) 3px, rgba(0,0,0,0.04) 4px);
+  pointer-events: none; z-index: 9999;
+}
+
+/* ── HEADER ── */
+header {
+  width: 100%; padding: 18px 24px 10px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.logo {
+  font-size: clamp(0.7rem,2vw,1.1rem);
+  color: var(--gold);
+  text-shadow: 0 0 18px var(--gold), 0 0 40px rgba(255,204,0,0.2);
+  letter-spacing: 4px;
+  animation: flicker 6s infinite;
+}
+.logo span { color: var(--accent); }
+@keyframes flicker {
+  0%,94%,100%{opacity:1} 95%{opacity:.6} 97%{opacity:.9} 98%{opacity:.5} 99%{opacity:1}
+}
+.status-badge {
+  font-family: 'VT323', monospace; font-size: 1rem; letter-spacing: 2px;
+  padding: 4px 12px; border: 1px solid #2a2a3a; color: #555;
+}
+.status-badge.connected { border-color: var(--green); color: var(--green); }
+
+/* ── SCREENS ── */
+.screen { display:none; flex-direction:column; align-items:center; width:100%; padding:24px 16px; }
+.screen.active { display:flex; }
+
+/* ── LOBBY ── */
+.lobby-wrap {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+  max-width: 780px; width: 100%;
+}
+@media(max-width:600px){ .lobby-wrap{ grid-template-columns:1fr; } }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 24px;
+  position: relative;
+}
+.card::before {
+  content:''; position:absolute; inset:-1px;
+  background: linear-gradient(var(--panel),var(--panel)) padding-box,
+              linear-gradient(135deg, var(--accent) 0%, transparent 50%, var(--cyan) 100%) border-box;
+  z-index:-1;
+}
+.card-title {
+  font-size: 0.55rem; letter-spacing: 3px; margin-bottom: 20px;
+  color: var(--cyan); text-transform: uppercase;
+}
+
+.field-label { font-family:'VT323',monospace; font-size:0.95rem; color:#555; letter-spacing:2px; margin-bottom:6px; }
+.text-input {
+  font-family: 'VT323', monospace; font-size: 1.4rem;
+  background: #0a0b14; border: 1px solid #2a2a3a; color: #fff;
+  padding: 8px 12px; width: 100%; outline: none; letter-spacing: 2px;
+  transition: border-color 0.2s;
+}
+.text-input:focus { border-color: var(--cyan); }
+.text-input::placeholder { color: #333; }
+
+.btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.6rem; letter-spacing: 2px; padding: 12px 20px;
+  border: none; cursor: pointer; text-transform: uppercase;
+  transition: all 0.1s; display: inline-block; margin-top: 14px;
+}
+.btn-primary {
+  background: var(--accent); color: #000;
+  box-shadow: 4px 4px 0 #7a0000, 0 0 20px var(--glow-r);
+}
+.btn-primary:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 #7a0000, 0 0 30px var(--glow-r); }
+.btn-primary:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 #7a0000; }
+.btn-secondary {
+  background: transparent; color: var(--cyan);
+  border: 1px solid var(--cyan); box-shadow: 0 0 12px var(--glow-c);
+}
+.btn-secondary:hover { background: var(--cyan); color: #000; }
+.btn-full { width: 100%; text-align: center; }
+
+.divider { height:1px; background: var(--border); margin: 16px 0; }
+
+.room-code-display {
+  font-family: 'VT323', monospace;
+  font-size: 2.2rem; letter-spacing: 6px;
+  color: var(--gold);
+  text-shadow: 0 0 16px var(--gold);
+  background: #0a0b14; border: 1px dashed #3a3a10;
+  padding: 10px; text-align: center; margin: 10px 0;
+  cursor: pointer; position: relative;
+}
+.room-code-display::after {
+  content:'CLICK TO COPY'; position:absolute; bottom:-20px; left:50%; transform:translateX(-50%);
+  font-size:0.55rem; color:#555; letter-spacing:2px;
+}
+.copied-toast {
+  position:fixed; bottom:30px; left:50%; transform:translateX(-50%);
+  background: var(--green); color:#000; padding:8px 20px;
+  font-size:0.55rem; letter-spacing:2px; opacity:0; transition:opacity 0.3s; pointer-events:none;
+  z-index:10000;
+}
+.copied-toast.show { opacity:1; }
+
+.players-list { margin-top:12px; }
+.player-row {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 0; border-bottom:1px solid var(--border);
+  font-family:'VT323',monospace; font-size:1.1rem;
+}
+.player-pip { width:10px;height:10px;border-radius:50%;flex-shrink:0; }
+.player-you { color:#555; font-size:0.7rem; margin-left:auto; }
+.player-host-badge { color:var(--gold); font-size:0.6rem; margin-left:auto; }
+
+.waiting-msg {
+  font-family:'VT323',monospace; font-size:1rem; color:#444;
+  letter-spacing:2px; margin-top:14px; animation: blink 1.2s step-end infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+.error-msg { font-family:'VT323',monospace; font-size:1rem; color:var(--accent); margin-top:8px; min-height:1.2rem; }
+
+/* ── GAME ── */
+#game-screen {
+  display:none; flex-direction:column; align-items:center; width:100%; padding:8px;
+}
+
+#hud {
+  display:flex; gap:6px; flex-wrap:wrap; justify-content:center;
+  margin-bottom:8px; max-width:100%;
+}
+.hud-card {
+  background:var(--panel); border:1px solid #2a2a3a;
+  padding:5px 10px; display:flex; align-items:center; gap:6px;
+  font-size:0.38rem; min-width:80px; transition:opacity 0.3s;
+}
+.hud-card.dead { opacity:0.25; filter:grayscale(1); }
+.hud-card.me { border-color:var(--cyan); }
+.hud-pip { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+.hud-name { color:#ccc; }
+.hud-lives { color:var(--gold); margin-left:auto; font-size:0.5rem; }
+
+#canvas-wrap {
+  position:relative;
+  border:2px solid #1a1a2a;
+  overflow:hidden;
+  box-shadow: 0 0 60px rgba(0,0,0,0.9);
+}
+#game-canvas { display:block; image-rendering:pixelated; }
+
+/* viewport scroll hint */
+#canvas-wrap::after {
+  content:'';
+  position:absolute; inset:0;
+  box-shadow: inset 0 0 40px rgba(0,0,0,0.6);
+  pointer-events:none;
+}
+
+#overlay {
+  position:absolute; inset:0; display:none;
+  flex-direction:column; align-items:center; justify-content:center;
+  background:rgba(0,0,0,0.88); z-index:20; padding:20px;
+}
+#overlay.visible { display:flex; }
+.ov-title { font-size:clamp(0.9rem,3vw,1.6rem); color:var(--gold); text-shadow:0 0 20px var(--gold); margin-bottom:16px; text-align:center; }
+.ov-sub { font-family:'VT323',monospace; font-size:1.3rem; color:#666; margin-bottom:24px; text-align:center; }
+.countdown-num { font-size:clamp(3rem,12vw,6rem); color:var(--accent); text-shadow:0 0 30px var(--accent); animation:popIn 0.6s ease-out; }
+@keyframes popIn { 0%{transform:scale(2);opacity:0} 100%{transform:scale(1);opacity:1} }
+
+.bottom-bar {
+  margin-top:10px; font-family:'VT323',monospace; font-size:0.95rem;
+  color:#333; text-align:center; letter-spacing:2px;
+}
+
+.copied-toast { font-family:'Press Start 2P',monospace; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">💣 MAZE<span>BOMBER</span></div>
+  <div class="status-badge" id="net-status">OFFLINE</div>
+</header>
+
+<div id="toast" class="copied-toast">COPIED!</div>
+
+<!-- LOBBY SCREEN -->
+<div class="screen active" id="lobby-screen">
+  <div style="max-width:780px;width:100%;margin-bottom:20px;text-align:center;">
+    <div style="font-size:0.45rem;color:#444;letter-spacing:3px;margin-top:8px;">ONLINE MULTIPLAYER · UP TO 8 PLAYERS · EACH ON THEIR OWN DEVICE</div>
+  </div>
+
+  <div class="lobby-wrap">
+    <!-- HOST -->
+    <div class="card">
+      <div class="card-title">⚡ HOST A GAME</div>
+      <div class="field-label">YOUR NAME</div>
+      <input class="text-input" id="host-name" maxlength="8" placeholder="BOMBER1" />
+      <button class="btn btn-primary btn-full" onclick="hostGame()">CREATE ROOM</button>
+
+      <div id="host-info" style="display:none;margin-top:20px;">
+        <div class="field-label">SHARE THIS CODE</div>
+        <div class="room-code-display" id="room-code-el" onclick="copyCode()">——</div>
+        <div style="height:28px;"></div>
+        <div class="divider"></div>
+        <div class="card-title" style="margin-bottom:10px;">PLAYERS IN LOBBY</div>
+        <div id="host-players-list" class="players-list"></div>
+        <div class="waiting-msg" id="waiting-msg">WAITING FOR PLAYERS...</div>
+        <button class="btn btn-primary btn-full" id="start-btn" onclick="hostStartGame()" style="margin-top:16px;display:none;">
+          START GAME
+        </button>
+      </div>
+      <div class="error-msg" id="host-err"></div>
+    </div>
+
+    <!-- JOIN -->
+    <div class="card">
+      <div class="card-title">🔗 JOIN A GAME</div>
+      <div class="field-label">YOUR NAME</div>
+      <input class="text-input" id="join-name" maxlength="8" placeholder="BOMBER2" />
+      <div class="field-label" style="margin-top:14px;">ROOM CODE</div>
+      <input class="text-input" id="join-code" maxlength="6" placeholder="ABC123" style="text-transform:uppercase;" />
+      <button class="btn btn-secondary btn-full" onclick="joinGame()">JOIN ROOM</button>
+
+      <div id="join-info" style="display:none;margin-top:20px;">
+        <div class="card-title" style="margin-bottom:10px;">PLAYERS IN LOBBY</div>
+        <div id="join-players-list" class="players-list"></div>
+        <div class="waiting-msg">WAITING FOR HOST TO START...</div>
+      </div>
+      <div class="error-msg" id="join-err"></div>
+    </div>
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game-screen">
+  <div id="hud"></div>
+  <div id="canvas-wrap">
+    <canvas id="game-canvas"></canvas>
+    <div id="overlay">
+      <div id="overlay-content"></div>
+    </div>
+  </div>
+  <div class="bottom-bar" id="bottom-bar">ARROWS / WASD = MOVE &nbsp;·&nbsp; SPACE / ENTER = BOMB &nbsp;·&nbsp; ESC = QUIT</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════════════
+const CELL = 36;
+const COLS = 51;   // 3× original 17
+const ROWS = 39;   // 3× original 13
+const BOMB_RADIUS = 4;
+const BOMB_TIMER_MS = 2500;
+const EXPLOSION_DURATION = 600;
+const PLAYER_SPEED = 3.2;
+const MAX_PLAYERS = 8;
+
+const COLORS = ['#ff3c3c','#3cf0ff','#aaff44','#ffaa00','#bb44ff','#ff88cc','#44ffcc','#ffff44'];
+const DARKS  = ['#7a0000','#007a80','#447700','#7a4400','#550077','#880040','#007755','#888800'];
+
+// Game tick rate for host (ms)
+const TICK_MS = 50; // 20Hz state broadcasts
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PEER / NETWORK STATE
+// ═══════════════════════════════════════════════════════════════════════════════
+let peer = null;
+let isHost = false;
+let myId = null;        // slot index 0-7
+let hostConn = null;    // client → host connection
+let clientConns = {};   // host → { peerId: DataConnection }
+let roomCode = null;
+
+// Lobby state (host owns)
+let lobbyPlayers = []; // [{peerId, name, color, id}]
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GAME STATE (host simulates; clients receive state)
+// ═══════════════════════════════════════════════════════════════════════════════
+let grid = [];
+let players = [];
+let bombs = [];
+let explosions = [];
+let gameRunning = false;
+let gameOver = false;
+let mySlot = -1;
+
+// Input state per player (host tracks for all, clients send inputs)
+let inputStates = {}; // slotId → {up,down,left,right,bomb}
+let pendingBombs = new Set(); // slot ids requesting bomb this frame
+
+let simInterval = null;
+let lastSim = 0;
+
+// Rendering
+let animFrame = null;
+let viewport = { x: 0, y: 0 }; // camera offset in pixels
+let canvas, ctx;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PEER SETUP
+// ═══════════════════════════════════════════════════════════════════════════════
+function initPeer(onOpen) {
+  // Generate a random short peer ID for host room code
+  const id = isHost ? genRoomCode() : undefined;
+  peer = new Peer(id, { debug: 0 });
+
+  peer.on('open', pid => {
+    roomCode = pid;
+    setStatus(true);
+    onOpen(pid);
+  });
+
+  peer.on('error', err => {
+    console.error('Peer error:', err);
+    showErr('host-err', 'Connection error: ' + err.type);
+    showErr('join-err', 'Connection error: ' + err.type);
+  });
+}
+
+function genRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random()*chars.length)];
+  return code;
+}
+
+function setStatus(on) {
+  const el = document.getElementById('net-status');
+  el.textContent = on ? 'ONLINE' : 'OFFLINE';
+  el.className = 'status-badge' + (on ? ' connected' : '');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HOST FLOW
+// ═══════════════════════════════════════════════════════════════════════════════
+function hostGame() {
+  const name = (document.getElementById('host-name').value.trim() || 'BOMBER1').toUpperCase().substring(0,8);
+  clearErr('host-err');
+  isHost = true;
+
+  initPeer(pid => {
+    roomCode = pid;
+    document.getElementById('room-code-el').textContent = pid;
+    document.getElementById('host-info').style.display = 'block';
+
+    // Add host as slot 0
+    mySlot = 0;
+    lobbyPlayers = [{ peerId: pid, name, color: COLORS[0], dark: DARKS[0], id: 0 }];
+    inputStates[0] = { up:false,down:false,left:false,right:false,bomb:false };
+    renderLobbyList();
+
+    // Listen for incoming connections
+    peer.on('connection', conn => {
+      conn.on('open', () => handleClientConnect(conn));
+      conn.on('data', data => handleHostReceive(conn.peer, data));
+      conn.on('close', () => handleClientDisconnect(conn.peer));
+      conn.on('error', e => console.error('conn err', e));
+    });
+  });
+}
+
+function handleClientConnect(conn) {
+  if (lobbyPlayers.length >= MAX_PLAYERS) {
+    conn.send({ type:'REJECTED', reason:'Room is full' });
+    conn.close(); return;
+  }
+  // Temporarily store
+  clientConns[conn.peer] = conn;
+  conn.send({ type:'NEED_INFO' });
+}
+
+function handleClientDisconnect(peerId) {
+  delete clientConns[peerId];
+  lobbyPlayers = lobbyPlayers.filter(p => p.peerId !== peerId);
+  reassignSlots();
+  renderLobbyList();
+  broadcastLobby();
+  if (gameRunning) {
+    // Mark player dead
+    const p = players.find(pl => pl.peerId === peerId);
+    if (p) { p.alive = false; checkWin(); }
+    broadcastState();
+  }
+}
+
+function handleHostReceive(peerId, data) {
+  if (!data || !data.type) return;
+
+  if (data.type === 'JOIN_INFO') {
+    const slot = lobbyPlayers.length;
+    const player = {
+      peerId,
+      name: (data.name||'BOMBER').toUpperCase().substring(0,8),
+      color: COLORS[slot],
+      dark: DARKS[slot],
+      id: slot
+    };
+    lobbyPlayers.push(player);
+    inputStates[slot] = { up:false,down:false,left:false,right:false,bomb:false };
+    reassignSlots();
+    renderLobbyList();
+    broadcastLobby();
+    // Tell this client their slot
+    clientConns[peerId]?.send({ type:'JOINED', slot, players: lobbyPlayers });
+    return;
+  }
+
+  if (data.type === 'INPUT') {
+    const p = lobbyPlayers.find(lp => lp.peerId === peerId);
+    if (!p) return;
+    inputStates[p.id] = data.input;
+    if (data.input.bomb) pendingBombs.add(p.id);
+    return;
+  }
+}
+
+function reassignSlots() {
+  lobbyPlayers.forEach((p, i) => {
+    p.id = i;
+    p.color = COLORS[i];
+    p.dark = DARKS[i];
+  });
+}
+
+function broadcastLobby() {
+  const msg = { type:'LOBBY_UPDATE', players: lobbyPlayers };
+  Object.values(clientConns).forEach(c => c.send(msg));
+}
+
+function renderLobbyList() {
+  const el = document.getElementById(isHost ? 'host-players-list' : 'join-players-list');
+  if (!el) return;
+  el.innerHTML = lobbyPlayers.map((p,i) => `
+    <div class="player-row">
+      <div class="player-pip" style="background:${p.color}"></div>
+      <span style="color:${p.color}">${p.name}</span>
+      ${i===0?'<span class="player-host-badge">HOST</span>':''}
+      ${p.peerId===peer?.id?'<span class="player-you">← YOU</span>':''}
+    </div>`).join('');
+
+  const startBtn = document.getElementById('start-btn');
+  if (startBtn) {
+    startBtn.style.display = lobbyPlayers.length >= 1 ? 'block' : 'none';
+  }
+}
+
+function hostStartGame() {
+  if (!isHost) return;
+  // Build game state
+  initGameState();
+  const msg = { type: 'GAME_START', grid: serializeGrid(), players, bombs:[], explosions:[] };
+  Object.values(clientConns).forEach(c => c.send(msg));
+  launchGame();
+}
+
+function broadcastState() {
+  if (!isHost) return;
+  const msg = {
+    type: 'STATE',
+    players: players.map(p => ({
+      id:p.id, x:p.x, y:p.y, alive:p.alive, lives:p.lives,
+      dir:p.dir, walkFrame:p.walkFrame, invincible:p.invincible>0
+    })),
+    bombs: bombs.map(b => ({r:b.r,c:b.c,owner:b.owner,timer:b.timer})),
+    explosions: explosions.map(e => ({cells:e.cells, timer:e.timer, maxTimer:e.maxTimer})),
+    gridChanges: pendingGridChanges,
+  };
+  pendingGridChanges = [];
+  Object.values(clientConns).forEach(c => c.send(msg));
+}
+let pendingGridChanges = []; // [{r,c,v}] destructible walls removed
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CLIENT FLOW
+// ═══════════════════════════════════════════════════════════════════════════════
+function joinGame() {
+  const name = (document.getElementById('join-name').value.trim() || 'BOMBER2').toUpperCase().substring(0,8);
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  if (!code || code.length < 4) { showErr('join-err','Enter a room code'); return; }
+  clearErr('join-err');
+  isHost = false;
+
+  initPeer(() => {
+    hostConn = peer.connect(code, { reliable: true });
+    hostConn.on('open', () => {
+      setStatus(true);
+      document.getElementById('join-info').style.display = 'block';
+    });
+    hostConn.on('data', data => handleClientReceive(data));
+    hostConn.on('error', e => showErr('join-err', 'Could not connect to room'));
+    hostConn.on('close', () => {
+      setStatus(false);
+      showErr('join-err', 'Disconnected from host');
+    });
+    hostConn.on('open', () => {
+      // Will receive NEED_INFO then send JOIN_INFO
+    });
+  });
+}
+
+function handleClientReceive(data) {
+  if (!data || !data.type) return;
+
+  if (data.type === 'NEED_INFO') {
+    const name = (document.getElementById('join-name').value.trim() || 'BOMBER').toUpperCase().substring(0,8);
+    hostConn.send({ type:'JOIN_INFO', name });
+    return;
+  }
+
+  if (data.type === 'REJECTED') {
+    showErr('join-err', data.reason || 'Rejected');
+    hostConn.close(); return;
+  }
+
+  if (data.type === 'JOINED') {
+    mySlot = data.slot;
+    lobbyPlayers = data.players;
+    renderLobbyList();
+    return;
+  }
+
+  if (data.type === 'LOBBY_UPDATE') {
+    lobbyPlayers = data.players;
+    mySlot = lobbyPlayers.findIndex(p => p.peerId === peer.id);
+    renderLobbyList();
+    return;
+  }
+
+  if (data.type === 'GAME_START') {
+    deserializeGrid(data.grid);
+    players = data.players;
+    bombs = []; explosions = [];
+    launchGame();
+    return;
+  }
+
+  if (data.type === 'STATE') {
+    // Reconcile
+    data.players.forEach(sp => {
+      const lp = players.find(p=>p.id===sp.id);
+      if (lp) {
+        // Smooth: lerp position for remote players
+        if (sp.id === mySlot) {
+          lp.alive = sp.alive; lp.lives = sp.lives; lp.invincible = sp.invincible?800:0;
+        } else {
+          lp.x = lerp(lp.x, sp.x, 0.4);
+          lp.y = lerp(lp.y, sp.y, 0.4);
+          lp.alive = sp.alive; lp.lives = sp.lives;
+          lp.dir = sp.dir; lp.walkFrame = sp.walkFrame;
+          lp.invincible = sp.invincible ? 800 : 0;
+        }
+      }
+    });
+    bombs = data.bombs.map(b => ({...b}));
+    explosions = data.explosions.map(e => ({...e}));
+    if (data.gridChanges) data.gridChanges.forEach(({r,c,v}) => { if(grid[r]) grid[r][c]=v; });
+    updateHUD();
+    return;
+  }
+
+  if (data.type === 'GAME_OVER') {
+    gameOver = true; gameRunning = false;
+    showGameOver(data.winner);
+    return;
+  }
+
+  if (data.type === 'COUNTDOWN') {
+    showCountdown(data.value);
+    return;
+  }
+}
+
+function lerp(a,b,t){ return a+(b-a)*t; }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAP GENERATION
+// ═══════════════════════════════════════════════════════════════════════════════
+function generateMap() {
+  grid = [];
+  for (let r=0;r<ROWS;r++) {
+    grid[r] = [];
+    for (let c=0;c<COLS;c++) {
+      if (r===0||r===ROWS-1||c===0||c===COLS-1) { grid[r][c]=1; continue; }
+      if (r%2===0&&c%2===0) { grid[r][c]=1; continue; }
+      grid[r][c]=0;
+    }
+  }
+
+  // Spawn positions (8 corners/edges spread across map)
+  const spawnCells = new Set();
+  getSpawnPositions().forEach(({r,c}) => {
+    [[-1,-1],[-1,0],[-1,1],[0,-1],[0,0],[0,1],[1,-1],[1,0],[1,1],
+     [-2,0],[2,0],[0,-2],[0,2]].forEach(([dr,dc])=>{
+      const nr=r+dr, nc=c+dc;
+      if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS) spawnCells.add(`${nr},${nc}`);
+    });
+  });
+
+  for (let r=1;r<ROWS-1;r++) {
+    for (let c=1;c<COLS-1;c++) {
+      if (grid[r][c]===0 && !spawnCells.has(`${r},${c}`) && Math.random()<0.42) {
+        grid[r][c]=2;
+      }
+    }
+  }
+}
+
+function getSpawnPositions() {
+  const margin = 1;
+  const mr = ROWS-2, mc = COLS-2;
+  const mh = Math.floor(mr/2), mw = Math.floor(mc/2);
+  return [
+    {r:1,c:1}, {r:1,c:mc}, {r:mr,c:1}, {r:mr,c:mc},
+    {r:1,c:mw}, {r:mr,c:mw}, {r:mh,c:1}, {r:mh,c:mc}
+  ];
+}
+
+function serializeGrid() {
+  return grid.map(row => row.join(','));
+}
+function deserializeGrid(data) {
+  grid = data.map(row => row.split(',').map(Number));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GAME INIT
+// ═══════════════════════════════════════════════════════════════════════════════
+function initGameState() {
+  generateMap();
+  const spawns = getSpawnPositions();
+  players = lobbyPlayers.map((lp, i) => {
+    const sp = spawns[i] || spawns[0];
+    return {
+      id: lp.id, peerId: lp.peerId,
+      name: lp.name, color: lp.color, dark: lp.dark,
+      x: sp.c*CELL+CELL/2, y: sp.r*CELL+CELL/2,
+      alive: true, lives: 3,
+      bombCooldown: 0, maxBombs: 2, activeBombs: 0,
+      invincible: 0, dir:'down', walkFrame:0, walkTimer:0,
+    };
+  });
+  bombs = []; explosions = []; gameOver = false;
+  pendingGridChanges = [];
+  Object.keys(inputStates).forEach(k => inputStates[k]={up:false,down:false,left:false,right:false,bomb:false});
+  pendingBombs.clear();
+}
+
+function launchGame() {
+  document.getElementById('lobby-screen').classList.remove('active');
+  document.getElementById('game-screen').style.display='flex';
+
+  canvas = document.getElementById('game-canvas');
+  ctx = canvas.getContext('2d');
+
+  // Set canvas to 3× map size
+  const W = COLS*CELL, H = ROWS*CELL;
+  canvas.width = W; canvas.height = H;
+
+  // Viewport = window size (clamped)
+  resizeViewport();
+  window.addEventListener('resize', resizeViewport);
+
+  gameRunning = false;
+  gameOver = false;
+
+  // Countdown then start
+  broadcastCountdown(3);
+  countdownThen(3, () => {
+    gameRunning = true;
+    if (isHost) startSimulation();
+    startRendering();
+  });
+
+  updateHUD();
+  setupInput();
+}
+
+function resizeViewport() {
+  const wrap = document.getElementById('canvas-wrap');
+  const maxW = Math.min(window.innerWidth - 16, COLS*CELL);
+  const maxH = Math.min(window.innerHeight - 160, ROWS*CELL);
+  wrap.style.width = maxW+'px';
+  wrap.style.height = maxH+'px';
+  wrap.style.overflow = 'hidden';
+  canvas.style.position = 'absolute';
+  canvas.style.transformOrigin = 'top left';
+}
+
+function broadcastCountdown(n) {
+  if (!isHost) return;
+  for (let i=n; i>=0; i--) {
+    setTimeout(() => {
+      Object.values(clientConns).forEach(c=>c.send({type:'COUNTDOWN',value:i}));
+    }, (n-i)*900);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INPUT
+// ═══════════════════════════════════════════════════════════════════════════════
+let keys2 = {};
+function setupInput() {
+  window.addEventListener('keydown', onKey, true);
+  window.addEventListener('keyup', onKeyUp, true);
+}
+function onKey(e) {
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  keys2[e.key] = true;
+  if (e.key==='Escape') quitGame();
+}
+function onKeyUp(e) { keys2[e.key] = false; }
+
+function buildMyInput() {
+  const up    = !!(keys2['ArrowUp']||keys2['w']||keys2['W']);
+  const down  = !!(keys2['ArrowDown']||keys2['s']||keys2['S']);
+  const left  = !!(keys2['ArrowLeft']||keys2['a']||keys2['A']);
+  const right = !!(keys2['ArrowRight']||keys2['d']||keys2['D']);
+  const bomb  = !!(keys2[' ']||keys2['Enter']||keys2['e']||keys2['E']);
+  return { up, down, left, right, bomb };
+}
+
+// Client sends input to host at ~20Hz
+let inputInterval = setInterval(() => {
+  if (!gameRunning) return;
+  const inp = buildMyInput();
+  if (isHost) {
+    inputStates[mySlot] = inp;
+    if (inp.bomb) pendingBombs.add(mySlot);
+  } else if (hostConn) {
+    hostConn.send({ type:'INPUT', input:inp });
+  }
+}, 50);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HOST SIMULATION
+// ═══════════════════════════════════════════════════════════════════════════════
+function startSimulation() {
+  lastSim = performance.now();
+  simInterval = setInterval(simTick, TICK_MS);
+}
+
+function simTick() {
+  if (!gameRunning || gameOver) return;
+  const now = performance.now();
+  const dt = now - lastSim;
+  lastSim = now;
+
+  players.forEach(p => { if(p.alive) simPlayer(p, dt); });
+  simBombs(dt);
+  simExplosions(dt);
+  checkWin();
+  broadcastState();
+}
+
+function simPlayer(p, dt) {
+  const inp = inputStates[p.id] || {};
+  let dx=0,dy=0;
+  if(inp.up) dy=-1; else if(inp.down) dy=1;
+  if(inp.left) dx=-1; else if(inp.right) dx=1;
+
+  const spd = PLAYER_SPEED*(dt/16);
+  if(dx!==0){ const nx=p.x+dx*spd; if(canMove(nx,p.y,p)) p.x=nx; }
+  if(dy!==0){ const ny=p.y+dy*spd; if(canMove(p.x,ny,p)) p.y=ny; }
+
+  if(dx<0)p.dir='left'; else if(dx>0)p.dir='right';
+  else if(dy<0)p.dir='up'; else if(dy>0)p.dir='down';
+
+  if(dx!==0||dy!==0){ p.walkTimer=(p.walkTimer||0)+dt; if(p.walkTimer>150){p.walkTimer=0;p.walkFrame=(p.walkFrame+1)%4;} }
+  else p.walkFrame=0;
+
+  if(pendingBombs.has(p.id)){
+    pendingBombs.delete(p.id);
+    if(p.bombCooldown<=0&&p.activeBombs<p.maxBombs) dropBomb(p);
+  }
+  if(p.bombCooldown>0) p.bombCooldown-=dt;
+  if(p.invincible>0) p.invincible-=dt;
+
+  // Check explosion hits
+  if(p.invincible<=0){
+    const {r,c}=getCell(p.x,p.y);
+    explosions.forEach(exp=>{
+      if(exp.cells.some(ec=>ec.r===r&&ec.c===c)) hitPlayer(p);
+    });
+  }
+}
+
+function canMove(x,y,player){
+  const r=CELL*0.34;
+  const pts=[{x:x-r,y:y-r},{x:x+r,y:y-r},{x:x-r,y:y+r},{x:x+r,y:y+r}];
+  for(const pt of pts){
+    const {r:gr,c:gc}=getCell(pt.x,pt.y);
+    if(!grid[gr]) return false;
+    if(grid[gr][gc]===1||grid[gr][gc]===2) return false;
+    if(bombs.some(b=>b.r===gr&&b.c===gc&&b.owner!==player.id)) return false;
+  }
+  return true;
+}
+
+function getCell(x,y){ return {r:Math.floor(y/CELL),c:Math.floor(x/CELL)}; }
+
+function dropBomb(p){
+  const {r,c}=getCell(p.x,p.y);
+  if(bombs.some(b=>b.r===r&&b.c===c)) return;
+  p.activeBombs++;
+  p.bombCooldown=350;
+  bombs.push({r,c,owner:p.id,timer:BOMB_TIMER_MS,maxTimer:BOMB_TIMER_MS,radius:BOMB_RADIUS,pulse:0});
+}
+
+function simBombs(dt){
+  bombs.forEach(b=>{ b.timer-=dt; b.pulse=(b.pulse||0)+dt*0.008; });
+  const exploding = bombs.filter(b=>b.timer<=0);
+  bombs = bombs.filter(b=>b.timer>0);
+  exploding.forEach(b=>explodeBomb(b));
+}
+
+function explodeBomb(bomb){
+  const owner=players[bomb.owner];
+  if(owner) owner.activeBombs=Math.max(0,owner.activeBombs-1);
+
+  const cells=[{r:bomb.r,c:bomb.c}];
+  [{dr:-1,dc:0},{dr:1,dc:0},{dr:0,dc:-1},{dr:0,dc:1}].forEach(({dr,dc})=>{
+    for(let i=1;i<=bomb.radius;i++){
+      const r2=bomb.r+dr*i,c2=bomb.c+dc*i;
+      if(!grid[r2]||grid[r2][c2]===1) break;
+      cells.push({r:r2,c:c2});
+      if(grid[r2][c2]===2){
+        grid[r2][c2]=0;
+        pendingGridChanges.push({r:r2,c:c2,v:0});
+        break;
+      }
+    }
+  });
+  bombs.forEach(b2=>{ if(cells.some(ec=>ec.r===b2.r&&ec.c===b2.c)) b2.timer=1; });
+  explosions.push({cells,timer:EXPLOSION_DURATION,maxTimer:EXPLOSION_DURATION});
+}
+
+function simExplosions(dt){ explosions.forEach(e=>e.timer-=dt); explosions=explosions.filter(e=>e.timer>0); }
+
+function hitPlayer(p){
+  p.lives--;
+  p.invincible=2000;
+  if(p.lives<=0){
+    p.alive=false;
+    explosions.push({cells:[{r:Math.floor(p.y/CELL),c:Math.floor(p.x/CELL)}],timer:400,maxTimer:400});
+  } else {
+    const spawns=getSpawnPositions();
+    const sp=spawns[p.id%spawns.length];
+    p.x=sp.c*CELL+CELL/2; p.y=sp.r*CELL+CELL/2;
+  }
+  updateHUD();
+}
+
+function checkWin(){
+  const alive=players.filter(p=>p.alive);
+  if(alive.length<=1&&!gameOver&&players.length>=1){
+    gameOver=true; gameRunning=false;
+    clearInterval(simInterval);
+    const winner=alive[0]||null;
+    setTimeout(()=>{
+      const msg={type:'GAME_OVER',winner:winner?{name:winner.name,color:winner.color}:null};
+      Object.values(clientConns).forEach(c=>c.send(msg));
+      showGameOver(winner?{name:winner.name,color:winner.color}:null);
+    },800);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HUD
+// ═══════════════════════════════════════════════════════════════════════════════
+function updateHUD(){
+  const hud=document.getElementById('hud');
+  if(!hud) return;
+  hud.innerHTML=players.map(p=>`
+    <div class="hud-card ${p.alive?'':'dead'} ${p.id===mySlot?'me':''}">
+      <div class="hud-pip" style="background:${p.color}"></div>
+      <span class="hud-name">${p.name}${p.id===mySlot?'*':''}</span>
+      <span class="hud-lives">${'♥'.repeat(Math.max(0,p.lives))}</span>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COUNTDOWN
+// ═══════════════════════════════════════════════════════════════════════════════
+function countdownThen(n, cb){
+  const overlay=document.getElementById('overlay');
+  const content=document.getElementById('overlay-content');
+  overlay.classList.add('visible');
+  let v=n;
+  const tick=()=>{
+    if(v<0){overlay.classList.remove('visible');cb();return;}
+    content.innerHTML=v===0?`<div class="countdown-num" style="color:var(--green)">GO!</div>`:`<div class="countdown-num">${v}</div>`;
+    v--; setTimeout(tick,900);
+  };
+  tick();
+}
+function showCountdown(v){
+  const content=document.getElementById('overlay-content');
+  if(!content) return;
+  const overlay=document.getElementById('overlay');
+  overlay.classList.add('visible');
+  content.innerHTML=v===0?`<div class="countdown-num" style="color:var(--green)">GO!</div>`:`<div class="countdown-num">${v}</div>`;
+  if(v===0) setTimeout(()=>overlay.classList.remove('visible'),600);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GAME OVER / QUIT
+// ═══════════════════════════════════════════════════════════════════════════════
+function showGameOver(winner){
+  const overlay=document.getElementById('overlay');
+  const content=document.getElementById('overlay-content');
+  overlay.classList.add('visible');
+  if(winner){
+    content.innerHTML=`<div class="ov-title" style="color:${winner.color}">🏆 ${winner.name} WINS!</div>
+      <div class="ov-sub">LAST PLAYER STANDING</div>
+      ${isHost?`<button class="btn btn-primary" onclick="doRematch()">REMATCH</button>`:'<div class="ov-sub">WAITING FOR HOST...</div>'}
+      <button class="btn btn-secondary" style="margin-left:8px" onclick="quitGame()">MENU</button>`;
+  } else {
+    content.innerHTML=`<div class="ov-title">💀 EVERYONE DIED</div>
+      ${isHost?`<button class="btn btn-primary" onclick="doRematch()">REMATCH</button>`:''}
+      <button class="btn btn-secondary" style="margin-left:8px" onclick="quitGame()">MENU</button>`;
+  }
+}
+
+function doRematch(){
+  if(!isHost) return;
+  document.getElementById('overlay').classList.remove('visible');
+  initGameState();
+  const msg={type:'GAME_START',grid:serializeGrid(),players,bombs:[],explosions:[]};
+  Object.values(clientConns).forEach(c=>c.send(msg));
+  bombs=[];explosions=[];gameOver=false;
+  broadcastCountdown(3);
+  countdownThen(3,()=>{
+    gameRunning=true;
+    startSimulation();
+  });
+  updateHUD();
+}
+
+function quitGame(){
+  gameRunning=false; gameOver=true;
+  clearInterval(simInterval);
+  cancelAnimationFrame(animFrame);
+  window.removeEventListener('keydown',onKey,true);
+  window.removeEventListener('keyup',onKeyUp,true);
+  window.removeEventListener('resize',resizeViewport);
+  document.getElementById('game-screen').style.display='none';
+  document.getElementById('lobby-screen').classList.add('active');
+  // Reset everything
+  if(peer){peer.destroy();peer=null;}
+  isHost=false; mySlot=-1; lobbyPlayers=[];
+  document.getElementById('host-info').style.display='none';
+  document.getElementById('join-info').style.display='none';
+  clearErr('host-err'); clearErr('join-err');
+  setStatus(false);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RENDERING (runs on all clients)
+// ═══════════════════════════════════════════════════════════════════════════════
+function startRendering(){
+  lastTime = performance.now();
+  animFrame = requestAnimationFrame(renderLoop);
+}
+
+let lastTime2 = 0;
+function renderLoop(ts){
+  animFrame = requestAnimationFrame(renderLoop);
+  const dt = Math.min(ts-lastTime2, 50);
+  lastTime2 = ts;
+
+  // Client-side prediction: move my player locally for smooth feel
+  if (!isHost && gameRunning) {
+    const me = players.find(p=>p.id===mySlot);
+    if (me && me.alive) clientPredictMe(me, dt);
+  }
+
+  updateCamera();
+  render();
+}
+
+function clientPredictMe(p, dt){
+  const inp = buildMyInput();
+  let dx=0,dy=0;
+  if(inp.up) dy=-1; else if(inp.down) dy=1;
+  if(inp.left) dx=-1; else if(inp.right) dx=1;
+  const spd=PLAYER_SPEED*(dt/16);
+  if(dx!==0){ const nx=p.x+dx*spd; if(canMovePredicted(nx,p.y)) p.x=nx; }
+  if(dy!==0){ const ny=p.y+dy*spd; if(canMovePredicted(p.x,ny)) p.y=ny; }
+  if(dx<0)p.dir='left'; else if(dx>0)p.dir='right';
+  else if(dy<0)p.dir='up'; else if(dy>0)p.dir='down';
+  if(dx!==0||dy!==0){ p.walkTimer=(p.walkTimer||0)+dt; if(p.walkTimer>150){p.walkTimer=0;p.walkFrame=(p.walkFrame+1)%4;} }
+  else p.walkFrame=0;
+}
+
+function canMovePredicted(x,y){
+  const r=CELL*0.34;
+  const pts=[{x:x-r,y:y-r},{x:x+r,y:y-r},{x:x-r,y:y+r},{x:x+r,y:y+r}];
+  for(const pt of pts){
+    const {r:gr,c:gc}=getCell(pt.x,pt.y);
+    if(!grid[gr]) return false;
+    if(grid[gr][gc]===1||grid[gr][gc]===2) return false;
+  }
+  return true;
+}
+
+function updateCamera(){
+  const me = players.find(p=>p.id===mySlot);
+  if(!me) return;
+  const wrap = document.getElementById('canvas-wrap');
+  if(!wrap) return;
+  const vw=wrap.clientWidth, vh=wrap.clientHeight;
+  const W=COLS*CELL, H=ROWS*CELL;
+  let tx = me.x - vw/2;
+  let ty = me.y - vh/2;
+  tx = Math.max(0, Math.min(W-vw, tx));
+  ty = Math.max(0, Math.min(H-vh, ty));
+  viewport.x = lerp(viewport.x, tx, 0.12);
+  viewport.y = lerp(viewport.y, ty, 0.12);
+  canvas.style.transform = `translate(${-Math.round(viewport.x)}px,${-Math.round(viewport.y)}px)`;
+}
+
+function render(){
+  if(!ctx||!canvas) return;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Determine visible cell range for culling
+  const wrap=document.getElementById('canvas-wrap');
+  const vw=wrap?wrap.clientWidth:COLS*CELL;
+  const vh=wrap?wrap.clientHeight:ROWS*CELL;
+  const c0=Math.max(0,Math.floor(viewport.x/CELL)-1);
+  const c1=Math.min(COLS,Math.ceil((viewport.x+vw)/CELL)+1);
+  const r0=Math.max(0,Math.floor(viewport.y/CELL)-1);
+  const r1=Math.min(ROWS,Math.ceil((viewport.y+vh)/CELL)+1);
+
+  // Floor tiles
+  for(let r=r0;r<r1;r++){
+    for(let c=c0;c<c1;c++){
+      ctx.fillStyle=(r+c)%2===0?'#0a0b12':'#0c0d16';
+      ctx.fillRect(c*CELL,r*CELL,CELL,CELL);
+    }
+  }
+
+  // Walls
+  for(let r=r0;r<r1;r++){
+    for(let c=c0;c<c1;c++){
+      const v=grid[r]&&grid[r][c];
+      if(v===1){
+        ctx.fillStyle='#161624'; ctx.fillRect(c*CELL,r*CELL,CELL,CELL);
+        ctx.fillStyle='#20203a'; ctx.fillRect(c*CELL,r*CELL,CELL,3);
+        ctx.fillStyle='#0e0e1a'; ctx.fillRect(c*CELL+CELL-3,r*CELL,3,CELL);
+        ctx.fillStyle='#1c1c2e'; ctx.fillRect(c*CELL+3,r*CELL+3,CELL-6,CELL-6);
+        // dot detail
+        ctx.fillStyle='#22223a';
+        ctx.fillRect(c*CELL+CELL/2-2,r*CELL+CELL/2-2,4,4);
+      } else if(v===2){
+        ctx.fillStyle='#1e1208'; ctx.fillRect(c*CELL,r*CELL,CELL,CELL);
+        ctx.fillStyle='#2a1a0a'; ctx.fillRect(c*CELL+1,r*CELL+1,CELL-2,CELL-2);
+        // brick rows
+        for(let bi=0;bi<3;bi++){
+          const yo=bi*12+1, xo=bi%2===0?0:CELL/3;
+          ctx.fillStyle='#3d2410';
+          ctx.fillRect(c*CELL+xo+1,r*CELL+yo,CELL/3*2-2,9);
+          if(xo+CELL/3*2+1<CELL) ctx.fillRect(c*CELL+xo+CELL/3*2+1,r*CELL+yo,CELL/3-2,9);
+        }
+        ctx.fillStyle='#5a3018';
+        ctx.fillRect(c*CELL,r*CELL,CELL,2);
+        ctx.fillRect(c*CELL,r*CELL,2,CELL);
+      }
+    }
+  }
+
+  // Explosion glow BG
+  explosions.forEach(exp=>{
+    const t=exp.timer/exp.maxTimer;
+    exp.cells.forEach(({r,c})=>{
+      if(c<c0||c>c1||r<r0||r>r1) return;
+      ctx.save();
+      ctx.globalAlpha=t*0.5;
+      const grd=ctx.createRadialGradient(c*CELL+CELL/2,r*CELL+CELL/2,0,c*CELL+CELL/2,r*CELL+CELL/2,CELL*0.8);
+      grd.addColorStop(0,'#ffbb00'); grd.addColorStop(1,'transparent');
+      ctx.fillStyle=grd;
+      ctx.fillRect(c*CELL-CELL*0.3,r*CELL-CELL*0.3,CELL*1.6,CELL*1.6);
+      ctx.restore();
+    });
+  });
+
+  // Bombs
+  bombs.forEach(b=>{
+    if(b.c<c0||b.c>c1||b.r<r0||b.r>r1) return;
+    const pulse=Math.sin((b.pulse||0))*0.15+0.85;
+    const bx=b.c*CELL+CELL/2, by=b.r*CELL+CELL/2;
+    const br=CELL*0.33*pulse;
+    const urgency=1-b.timer/BOMB_TIMER_MS;
+    ctx.save();
+    ctx.shadowColor=urgency>0.6?'#ff2222':'#ff8800';
+    ctx.shadowBlur=14+pulse*6;
+    ctx.fillStyle='#1a1a1a';
+    ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=urgency>0.6?'#ff2222':'#ff8800';
+    ctx.lineWidth=2; ctx.stroke();
+    // fuse
+    ctx.strokeStyle='#ffaa44'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(bx,by-br);
+    ctx.quadraticCurveTo(bx+br*0.8,by-br*1.2,bx+br*0.5,by-br*1.6); ctx.stroke();
+    ctx.fillStyle='#ffffaa';
+    ctx.beginPath(); ctx.arc(bx+br*0.5,by-br*1.6,2,0,Math.PI*2); ctx.fill();
+    // owner color
+    ctx.fillStyle=COLORS[b.owner]||'#fff';
+    ctx.globalAlpha=0.7;
+    ctx.beginPath(); ctx.arc(bx,by,br*0.3,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+
+  // Explosions
+  explosions.forEach(exp=>{
+    const t=exp.timer/exp.maxTimer;
+    exp.cells.forEach(({r,c})=>{
+      if(c<c0||c>c1||r<r0||r>r1) return;
+      ctx.save();
+      ctx.fillStyle=t>0.5?`rgba(255,160,0,${t*0.9})`:`rgba(255,60,0,${t*0.7})`;
+      ctx.fillRect(c*CELL+1,r*CELL+1,CELL-2,CELL-2);
+      if(t>0.4){
+        ctx.fillStyle=`rgba(255,255,200,${(t-0.4)*1.4})`;
+        ctx.fillRect(c*CELL+CELL*0.25,r*CELL+CELL*0.25,CELL*0.5,CELL*0.5);
+      }
+      ctx.restore();
+    });
+  });
+
+  // Players
+  players.forEach(p=>{
+    if(!p.alive) return;
+    if(p.invincible>0&&Math.floor(p.invincible/80)%2===0) return;
+    const px=Math.round(p.x), py=Math.round(p.y);
+    const s=CELL*0.37;
+    ctx.save();
+    // Shadow
+    ctx.fillStyle='rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(px,py+s*0.85,s*0.75,s*0.22,0,0,Math.PI*2); ctx.fill();
+    // Legs
+    const legSwing=Math.sin((p.walkFrame||0)*(Math.PI/2))*4;
+    ctx.fillStyle=p.color;
+    ctx.shadowColor=p.color; ctx.shadowBlur=p.id===mySlot?14:6;
+    ctx.fillRect(px-s*0.52,py+s*0.08-legSwing,s*0.42,s*0.72);
+    ctx.fillRect(px+s*0.1,py+s*0.08+legSwing,s*0.42,s*0.72);
+    // Torso
+    ctx.fillRect(px-s*0.58,py-s*0.5,s*1.16,s*0.66);
+    // Head
+    ctx.beginPath(); ctx.arc(px,py-s*0.58,s*0.52,0,Math.PI*2); ctx.fill();
+    // Eyes
+    ctx.shadowBlur=0; ctx.fillStyle='#000';
+    if(p.dir!=='up'){
+      const eo=p.dir==='left'?-s*0.12:(p.dir==='right'?s*0.12:0);
+      ctx.fillRect(px-s*0.22+eo,py-s*0.68,s*0.18,s*0.18);
+      ctx.fillRect(px+s*0.04+eo,py-s*0.68,s*0.18,s*0.18);
+    }
+    // ME indicator (crown)
+    if(p.id===mySlot){
+      ctx.fillStyle=p.color;
+      ctx.font=`${CELL*0.4}px serif`;
+      ctx.textAlign='center';
+      ctx.fillText('★',px,py-s*1.25);
+    }
+    // Name
+    ctx.fillStyle='rgba(0,0,0,0.75)';
+    ctx.fillRect(px-16,py-s*1.55,32,11);
+    ctx.fillStyle='#fff'; ctx.font='bold 7px monospace';
+    ctx.textAlign='center';
+    ctx.fillText(p.name.substring(0,5),px,py-s*1.47);
+    ctx.restore();
+  });
+
+  // Minimap
+  renderMinimap();
+}
+
+function renderMinimap(){
+  const mw=120, mh=Math.round(120*ROWS/COLS);
+  const mx=canvas.width-mw-8+Math.round(viewport.x);
+  const my=8+Math.round(viewport.y);
+  const cs=mw/COLS;
+
+  ctx.save();
+  ctx.fillStyle='rgba(0,0,0,0.7)';
+  ctx.fillRect(mx-1,my-1,mw+2,mh+2);
+
+  // walls
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const v=grid[r]&&grid[r][c];
+      if(v===1) ctx.fillStyle='#2a2a40';
+      else if(v===2) ctx.fillStyle='#3d2410';
+      else ctx.fillStyle='#0d0d18';
+      ctx.fillRect(mx+c*cs, my+r*cs, Math.ceil(cs), Math.ceil(cs));
+    }
+  }
+
+  // players
+  players.forEach(p=>{
+    if(!p.alive) return;
+    ctx.fillStyle=p.color;
+    ctx.beginPath();
+    ctx.arc(mx+p.x/CELL*cs, my+p.y/CELL*cs, p.id===mySlot?3:2, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  // viewport rect
+  const wrap=document.getElementById('canvas-wrap');
+  const vw=wrap?wrap.clientWidth:400, vh=wrap?wrap.clientHeight:300;
+  ctx.strokeStyle='rgba(255,255,255,0.3)';
+  ctx.lineWidth=1;
+  ctx.strokeRect(mx+viewport.x/CELL*cs, my+viewport.y/CELL*cs, vw/CELL*cs, vh/CELL*cs);
+
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════════════════════
+function copyCode(){
+  const code = document.getElementById('room-code-el').textContent;
+  navigator.clipboard?.writeText(code).then(()=>{
+    const t=document.getElementById('toast');
+    t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800);
+  });
+}
+function showErr(id,msg){ const el=document.getElementById(id); if(el) el.textContent=msg; }
+function clearErr(id){ const el=document.getElementById(id); if(el) el.textContent=''; }
+
+// Prevent space scrolling globally
+window.addEventListener('keydown', e=>{
+  if(e.key===' '&&e.target===document.body) e.preventDefault();
+},{passive:false});
+</script>
+</body>
+</html>
