@@ -102,21 +102,21 @@ header {
 /* ── LOBBY ── */
 .lobby-title {
   text-align: center; margin-bottom: 24px;
-  font-size: clamp(0.4rem, 1.2vw, 0.6rem);
+  font-size: clamp(0.75rem, 1.4vw, 0.9rem);
   color: #888; letter-spacing: 4px;
   font-family: 'Geist Mono', monospace;
 }
 
 .lobby-wrap {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
-  max-width: 820px; width: 100%;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+  max-width: 960px; width: 100%;
 }
-@media(max-width: 620px) { .lobby-wrap { grid-template-columns: 1fr; } }
+@media(max-width: 700px) { .lobby-wrap { grid-template-columns: 1fr; } }
 
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
-  padding: 22px;
+  padding: 28px;
   position: relative;
   overflow: hidden;
   clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
@@ -135,28 +135,28 @@ header {
 @keyframes cardSweep { 0%{left:-100%} 100%{left:200%} }
 
 .card-title {
-  font-size: 0.5rem; letter-spacing: 4px; margin-bottom: 18px;
+  font-size: 0.85rem; letter-spacing: 4px; margin-bottom: 20px;
   color: var(--cyan); text-transform: uppercase;
   display: flex; align-items: center; gap: 8px;
 }
 .card-title::before { content:''; display: inline-block; width: 16px; height: 2px; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
 
-.field-label { font-family:'Geist Mono', monospace; font-size: 0.8rem; color: #999; letter-spacing: 2px; margin-bottom: 6px; }
+.field-label { font-family:'Geist Mono', monospace; font-size: 0.75rem; color: #999; letter-spacing: 2px; margin-bottom: 8px; }
 .text-input {
-  font-family: 'Geist Mono', monospace; font-size: 1.3rem;
+  font-family: 'Geist Mono', monospace; font-size: 1.4rem;
   background: #080810; border: 1px solid #1a1a2e; color: #fff;
-  padding: 9px 12px; width: 100%; outline: none; letter-spacing: 2px;
+  padding: 11px 14px; width: 100%; outline: none; letter-spacing: 2px;
   transition: border-color 0.2s, box-shadow 0.2s;
   clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
 }
 .text-input:focus { border-color: var(--cyan); box-shadow: 0 0 16px rgba(0,245,255,0.2); }
-.text-input::placeholder { color: #222; }
+.text-input::placeholder { color: #333; }
 
 /* Mode selector */
 .mode-select { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .mode-btn {
-  font-family: 'Geist Mono', monospace; font-size: 0.38rem; letter-spacing: 2px;
-  padding: 8px 12px; border: 1px solid #2a2a3a; color: #999; background: transparent; cursor: pointer;
+  font-family: 'Geist Mono', monospace; font-size: 0.72rem; letter-spacing: 1px;
+  padding: 10px 16px; border: 1px solid #2a2a3a; color: #999; background: transparent; cursor: pointer;
   clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
   transition: all 0.2s;
 }
@@ -165,7 +165,7 @@ header {
 
 .btn {
   font-family: 'Geist Mono', monospace; font-weight: 700;
-  font-size: 0.5rem; letter-spacing: 3px; padding: 13px 22px;
+  font-size: 0.8rem; letter-spacing: 3px; padding: 14px 24px;
   border: none; cursor: pointer; text-transform: uppercase;
   transition: all 0.1s; display: inline-block; margin-top: 14px;
   clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
@@ -184,25 +184,25 @@ header {
 .btn-secondary:hover { background: var(--cyan); color: #000; }
 .btn-full { width: 100%; text-align: center; }
 
-.divider { height:1px; background: var(--border); margin: 16px 0; }
+.divider { height:1px; background: var(--border); margin: 18px 0; }
 
 .room-code-display {
-  font-family: 'Geist Mono', monospace; font-size: 2.4rem; letter-spacing: 8px;
+  font-family: 'Geist Mono', monospace; font-size: 2.6rem; letter-spacing: 10px;
   color: var(--gold); text-shadow: 0 0 20px var(--gold);
   background: #060609; border: 1px dashed rgba(255,215,0,0.3);
-  padding: 12px; text-align: center; margin: 10px 0 24px;
+  padding: 14px; text-align: center; margin: 10px 0 28px;
   cursor: pointer; position: relative;
   clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
 .room-code-display::after {
-  content:'▼ CLICK TO COPY ▼'; position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%);
-  font-family: 'Geist Mono', monospace; font-size: 0.7rem; color: #999; letter-spacing: 2px;
+  content:'▼ CLICK TO COPY ▼'; position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%);
+  font-family: 'Geist Mono', monospace; font-size: 0.65rem; color: #999; letter-spacing: 2px;
 }
 
 .copied-toast {
   position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-  background: var(--green); color: #000; padding: 10px 24px;
-  font-size: 0.5rem; letter-spacing: 3px; opacity: 0; transition: opacity 0.3s;
+  background: var(--green); color: #000; padding: 12px 28px;
+  font-size: 0.75rem; letter-spacing: 3px; opacity: 0; transition: opacity 0.3s;
   pointer-events: none; z-index: 10000;
   clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
@@ -210,22 +210,22 @@ header {
 
 .players-list { margin-top: 10px; }
 .player-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
   font-family: 'Geist Mono', monospace; font-size: 1rem; animation: playerIn 0.3s ease-out;
 }
 @keyframes playerIn { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
-.player-pip { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 6px currentColor; }
-.player-you { color: #999; font-size: 0.7rem; margin-left: auto; }
-.player-host-badge { color: var(--gold); font-size: 0.6rem; margin-left: auto; }
-.player-ready { color: var(--green); font-size: 0.6rem; }
+.player-pip { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 6px currentColor; }
+.player-you { color: #999; font-size: 0.72rem; margin-left: auto; }
+.player-host-badge { color: var(--gold); font-size: 0.72rem; margin-left: auto; }
+.player-ready { color: var(--green); font-size: 0.72rem; }
 
 .waiting-msg {
-  font-family: 'Geist Mono', monospace; font-size: 0.9rem; color: #888;
+  font-family: 'Geist Mono', monospace; font-size: 0.8rem; color: #888;
   letter-spacing: 3px; margin-top: 14px; animation: blink 1.4s step-end infinite;
 }
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
-.error-msg { font-family: 'Geist Mono', monospace; font-size: 0.9rem; color: var(--accent); margin-top: 8px; min-height: 1.2rem; }
+.error-msg { font-family: 'Geist Mono', monospace; font-size: 0.85rem; color: var(--accent); margin-top: 8px; min-height: 1.2rem; }
 
 /* ── GAME SCREEN ── */
 #game-screen {
@@ -413,20 +413,20 @@ header {
             <span class="mode-icon">⚡</span>BLITZ
           </button>
         </div>
-        <div style="font-family: 'Geist Mono', monospace; font-size: 0.7rem; color: #888; margin-top: 6px;" id="mode-desc">
+        <div style="font-family: 'Geist Mono', monospace; font-size: 0.8rem; color: #888; margin-top: 8px;" id="mode-desc">
           Classic: 3 lives, standard map, power-ups enabled
         </div>
       </div>
 
-      <div style="margin-top:14px;">
+      <div style="margin-top:16px;">
         <div class="field-label">AI OPPONENTS</div>
-        <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
-          <button class="mode-btn" onclick="changeBotCount(-1)" style="padding:6px 14px;font-size:1.1rem;">−</button>
-          <span id="bot-count-display" style="font-family:'Geist Mono', monospace;font-size:1.3rem;color:var(--cyan);min-width:28px;text-align:center;">0</span>
-          <button class="mode-btn" onclick="changeBotCount(1)" style="padding:6px 14px;font-size:1.1rem;">+</button>
-          <span style="font-family:'Geist Mono', monospace;font-size:0.75rem;color:#999;">BOTS</span>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:8px;">
+          <button class="mode-btn" onclick="changeBotCount(-1)" style="padding:8px 18px;font-size:1.2rem;">−</button>
+          <span id="bot-count-display" style="font-family:'Geist Mono', monospace;font-size:1.5rem;color:var(--cyan);min-width:32px;text-align:center;">0</span>
+          <button class="mode-btn" onclick="changeBotCount(1)" style="padding:8px 18px;font-size:1.2rem;">+</button>
+          <span style="font-family:'Geist Mono', monospace;font-size:0.8rem;color:#999;">BOTS</span>
         </div>
-        <div style="display:flex;gap:6px;margin-top:8px;">
+        <div style="display:flex;gap:8px;margin-top:10px;">
           <button class="mode-btn" onclick="setAIDiff('easy')" id="ai-easy">🟢 EASY</button>
           <button class="mode-btn active" onclick="setAIDiff('medium')" id="ai-medium">🟡 MEDIUM</button>
           <button class="mode-btn" onclick="setAIDiff('hard')" id="ai-hard">🔴 HARD</button>
@@ -463,29 +463,29 @@ header {
         <div class="card-title" style="margin-bottom:10px;">LOBBY</div>
         <div id="join-players-list" class="players-list"></div>
         <div class="waiting-msg">WAITING FOR HOST TO START...</div>
-        <div style="font-family:'Geist Mono', monospace;font-size:0.75rem;color:#888;margin-top:10px;" id="join-mode-info"></div>
+        <div style="font-family:'Geist Mono', monospace;font-size:0.8rem;color:#888;margin-top:10px;" id="join-mode-info"></div>
       </div>
       <div class="error-msg" id="join-err"></div>
     </div>
   </div>
 
   <!-- Controls reference -->
-  <div style="max-width:820px;width:100%;margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-    <div style="background:var(--panel);border:1px solid var(--border);padding:12px;clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%);">
-      <div style="font-size:0.4rem;color:var(--cyan);letter-spacing:3px;margin-bottom:8px;">POWER-UPS</div>
-      <div style="font-family:'Geist Mono', monospace;font-size:0.75rem;color:#999;line-height:1.8;">
+  <div style="max-width:960px;width:100%;margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+    <div style="background:var(--panel);border:1px solid var(--border);padding:16px;clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%);">
+      <div style="font-size:0.72rem;color:var(--cyan);letter-spacing:3px;margin-bottom:10px;font-weight:600;">POWER-UPS</div>
+      <div style="font-family:'Geist Mono', monospace;font-size:0.8rem;color:#999;line-height:2;">
         🔥 Bigger blast<br>💣 More bombs<br>👟 Speed boost<br>🛡️ Shield (1 hit)<br>⌛ Freeze others<br>💎 Extra life
       </div>
     </div>
-    <div style="background:var(--panel);border:1px solid var(--border);padding:12px;clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%);">
-      <div style="font-size:0.4rem;color:var(--cyan);letter-spacing:3px;margin-bottom:8px;">CONTROLS</div>
-      <div style="font-family:'Geist Mono', monospace;font-size:0.75rem;color:#999;line-height:1.8;">
-        ↑↓←→ / WASD Move<br>SPACE / ENTER Bomb<br>ESC Quit
+    <div style="background:var(--panel);border:1px solid var(--border);padding:16px;clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%);">
+      <div style="font-size:0.72rem;color:var(--cyan);letter-spacing:3px;margin-bottom:10px;font-weight:600;">CONTROLS</div>
+      <div style="font-family:'Geist Mono', monospace;font-size:0.8rem;color:#999;line-height:2;">
+        ↑↓←→ / WASD &nbsp; Move<br>SPACE / ENTER &nbsp; Bomb<br>ESC &nbsp; Quit
       </div>
     </div>
-    <div style="background:var(--panel);border:1px solid var(--border);padding:12px;clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%);">
-      <div style="font-size:0.4rem;color:var(--cyan);letter-spacing:3px;margin-bottom:8px;">MODES</div>
-      <div style="font-family:'Geist Mono', monospace;font-size:0.75rem;color:#999;line-height:1.8;">
+    <div style="background:var(--panel);border:1px solid var(--border);padding:16px;clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%);">
+      <div style="font-size:0.72rem;color:var(--cyan);letter-spacing:3px;margin-bottom:10px;font-weight:600;">MODES</div>
+      <div style="font-family:'Geist Mono', monospace;font-size:0.8rem;color:#999;line-height:2;">
         💣 Classic: 3 lives<br>💀 Survival: 1 life<br>⚡ Blitz: 90s timer
       </div>
     </div>
@@ -1517,19 +1517,13 @@ function simPlayer(p, dt) {
 }
 
 function canMove(x,y,player){
-  const r=CELL*0.34;
+  const r = CELL * 0.28; // tighter hitbox — easier to navigate corridors
   const pts=[{x:x-r,y:y-r},{x:x+r,y:y-r},{x:x-r,y:y+r},{x:x+r,y:y+r}];
   for(const pt of pts){
     const {r:gr,c:gc}=getCell(pt.x,pt.y);
     if(!grid[gr]) return false;
     const v=grid[gr][gc];
     if(v===1||v===2) return false;
-    // Only block on bombs that belong to OTHER players, or own bomb the player has fully left
-    for(const b of bombs){
-      if(b.r!==gr||b.c!==gc) continue;
-      if(b.owner===player.id && b.timer > BOMB_TIMER_MS - 400) continue; // grace period: walk off own bomb
-      return false;
-    }
   }
   return true;
 }
@@ -1901,17 +1895,12 @@ function clientPredictMe(p,dt){
 }
 
 function canMovePredicted(x,y,playerId){
-  const r=CELL*0.34;
+  const r = CELL * 0.28;
   const pts=[{x:x-r,y:y-r},{x:x+r,y:y-r},{x:x-r,y:y+r},{x:x+r,y:y+r}];
   for(const pt of pts){
     const {r:gr,c:gc}=getCell(pt.x,pt.y);
     if(!grid[gr]) return false;
     if(grid[gr][gc]===1||grid[gr][gc]===2) return false;
-    for(const b of bombs){
-      if(b.r!==gr||b.c!==gc) continue;
-      if(b.owner===playerId && b.timer > BOMB_TIMER_MS - 400) continue;
-      return false;
-    }
   }
   return true;
 }
