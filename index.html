@@ -353,7 +353,7 @@ header {
 }
 
 /* Responsive: show touch controls on mobile */
-@media (pointer: coarse), (max-width: 700px) {
+@media (pointer: coarse) {
   #touch-controls { display: block !important; }
   .bottom-bar { display: none; }
   #game-screen { padding-bottom: 200px; }
@@ -1135,6 +1135,11 @@ let inputInterval = setInterval(() => {
 // ── TOUCH CONTROLS ──
 function setupTouchControls() {
   const tc = document.getElementById('touch-controls');
+  // Only show on genuine touch/coarse-pointer devices (phones/tablets)
+  if (!window.matchMedia('(pointer: coarse)').matches) {
+    tc.style.display = 'none';
+    return;
+  }
   tc.style.display = 'block';
 
   const dirs = ['up','down','left','right'];
