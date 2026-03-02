@@ -427,6 +427,20 @@ header {
         <div class="card-title" style="margin-bottom:10px;">LOBBY</div>
         <div id="host-players-list" class="players-list"></div>
         <div class="waiting-msg" id="waiting-msg">WAITING FOR PLAYERS...</div>
+        <div style="margin-top:14px;">
+          <div class="field-label">AI OPPONENTS</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
+            <button class="mode-btn" onclick="changeBotCount(-1)" style="padding:6px 12px;font-size:1rem;">−</button>
+            <span id="bot-count-display" style="font-family:'Share Tech Mono';font-size:1.1rem;color:var(--cyan);min-width:24px;text-align:center;">0</span>
+            <button class="mode-btn" onclick="changeBotCount(1)" style="padding:6px 12px;font-size:1rem;">+</button>
+            <span style="font-family:'Share Tech Mono';font-size:0.75rem;color:#444;">BOTS</span>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:8px;" id="ai-diff-btns">
+            <button class="mode-btn" onclick="setAIDiff('easy')" id="ai-easy">🟢 EASY</button>
+            <button class="mode-btn active" onclick="setAIDiff('medium')" id="ai-medium">🟡 MEDIUM</button>
+            <button class="mode-btn" onclick="setAIDiff('hard')" id="ai-hard">🔴 HARD</button>
+          </div>
+        </div>
         <button class="btn btn-primary btn-full" id="start-btn" onclick="hostStartGame()" style="margin-top:16px;display:none;">
           ▶ START GAME
         </button>
@@ -531,6 +545,15 @@ const PING_INTERVAL = 2000;
 // Blitz mode timer
 const BLITZ_TIME = 90000;
 
+// AI difficulty configs
+const AI_DIFFICULTY = {
+  easy:   { reactionMs:800,  bombChance:0.006, fleeRange:3, label:'EASY',   icon:'🟢' },
+  medium: { reactionMs:400,  bombChance:0.018, fleeRange:5, label:'MEDIUM', icon:'🟡' },
+  hard:   { reactionMs:150,  bombChance:0.035, fleeRange:7, label:'HARD',   icon:'🔴' },
+};
+const BOT_NAMES = ['R0B0T','CYBER','GLITCH','N3X0S','V01D','SK1LL','PH4NT','Z3R0','AX10N','B1TSY'];
+let selectedAIDifficulty = 'medium';
+
 const COLORS = ['#ff3c5a','#00e5ff','#aaff44','#ffaa00','#cc44ff','#ff88cc','#44ffcc','#ffff44'];
 const DARKS  = ['#7a0020','#007a80','#447700','#7a4400','#660099','#882255','#007755','#888800'];
 
@@ -570,6 +593,8 @@ let blitzTimer = BLITZ_TIME;
 let inputStates = {};
 let pendingBombs = new Set();
 let simInterval = null;
+let botCount = 0; // number of AI bots to add
+let aiStates = {}; // per-bot AI brain state
 let lastSim = 0;
 let pendingGridChanges = [];
 let pendingPowerupChanges = [];
@@ -600,6 +625,20 @@ function setMode(m) {
     document.getElementById('mode-'+k).classList.toggle('active', k===m);
   });
   document.getElementById('mode-desc').textContent = modeDescs[m];
+}
+
+function setAIDiff(d) {
+  selectedAIDifficulty = d;
+  ['easy','medium','hard'].forEach(k => {
+    document.getElementById('ai-'+k).classList.toggle('active', k===d);
+  });
+}
+
+function changeBotCount(delta) {
+  const humanCount = lobbyPlayers.length;
+  const maxBots = MAX_PLAYERS - humanCount;
+  botCount = Math.max(0, Math.min(maxBots, botCount + delta));
+  document.getElementById('bot-count-display').textContent = botCount;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -738,8 +777,9 @@ function renderLobbyList() {
   el.innerHTML = lobbyPlayers.map((p,i) => `
     <div class="player-row">
       <div class="player-pip" style="background:${p.color}"></div>
-      <span style="color:${p.color}">${p.name}</span>
+      <span style="color:${p.color}">${p.isBot?'🤖 ':''}${p.name}</span>
       ${i===0?'<span class="player-host-badge">HOST</span>':''}
+      ${p.isBot?`<span style="color:#444;font-size:0.6rem;margin-left:auto">${(AI_DIFFICULTY[p.aiDifficulty]||AI_DIFFICULTY.medium).icon} ${(AI_DIFFICULTY[p.aiDifficulty]||AI_DIFFICULTY.medium).label}</span>`:''}
       ${p.peerId===peer?.id?'<span class="player-you">← YOU</span>':''}
     </div>`).join('');
   const startBtn = document.getElementById('start-btn');
@@ -763,7 +803,8 @@ function broadcastState() {
       id:p.id, x:p.x, y:p.y, alive:p.alive, lives:p.lives,
       dir:p.dir, walkFrame:p.walkFrame, invincible:p.invincible>0,
       frozen:p.frozen>0, shield:p.shield, speedBoost:p.speedBoost>0,
-      blastRadius:p.blastRadius, maxBombs:p.maxBombs, kills:p.kills
+      blastRadius:p.blastRadius, maxBombs:p.maxBombs, kills:p.kills,
+      isBot:p.isBot||false,
     })),
     bombs: bombs.map(b => ({r:b.r,c:b.c,owner:b.owner,timer:b.timer,maxTimer:b.maxTimer})),
     explosions: explosions.map(e => ({cells:e.cells,timer:e.timer,maxTimer:e.maxTimer})),
@@ -855,6 +896,7 @@ function handleClientReceive(data) {
     data.players.forEach(sp => {
       const lp = players.find(p=>p.id===sp.id);
       if (!lp) return;
+      lp.isBot = sp.isBot||false;
       if (sp.id === mySlot) {
         lp.alive=sp.alive; lp.lives=sp.lives; lp.invincible=sp.invincible?800:0;
         lp.shield=sp.shield; lp.frozen=sp.frozen?500:0;
@@ -949,11 +991,29 @@ function initGameState() {
   generateMap();
   const spawns = getSpawnPositions();
   const startLives = gameMode === 'survival' ? 1 : 3;
-  players = lobbyPlayers.map((lp, i) => {
+
+  // Build combined player list: humans + bots
+  const allPlayers = [...lobbyPlayers];
+  if (isHost) {
+    const usedNames = new Set(lobbyPlayers.map(p=>p.name));
+    const availNames = BOT_NAMES.filter(n=>!usedNames.has(n));
+    for (let i=0; i<botCount && allPlayers.length<MAX_PLAYERS; i++) {
+      const slot = allPlayers.length;
+      const bname = availNames[i % availNames.length];
+      allPlayers.push({
+        peerId: 'BOT_'+i, id: slot,
+        name: bname, color: COLORS[slot], dark: DARKS[slot],
+        isBot: true, aiDifficulty: selectedAIDifficulty,
+      });
+    }
+  }
+
+  players = allPlayers.map((lp, i) => {
     const sp = spawns[i % spawns.length];
     return {
       id: lp.id, peerId: lp.peerId,
       name: lp.name, color: lp.color, dark: lp.dark,
+      isBot: !!lp.isBot, aiDifficulty: lp.aiDifficulty || 'medium',
       x: sp.c*CELL+CELL/2, y: sp.r*CELL+CELL/2,
       alive: true, lives: startLives,
       bombCooldown: 0, maxBombs: 2, activeBombs: 0,
@@ -962,6 +1022,19 @@ function initGameState() {
       dir:'down', walkFrame:0, walkTimer:0, kills: 0,
     };
   });
+
+  // Init AI brain states
+  aiStates = {};
+  players.filter(p=>p.isBot).forEach(p => {
+    aiStates[p.id] = {
+      targetX: p.x, targetY: p.y,
+      path: [], reactionTimer: 0,
+      state: 'wander', // wander | hunt | flee | bomb
+      stuckTimer: 0, lastX: p.x, lastY: p.y,
+      bombCooldown: 0,
+    };
+  });
+
   bombs=[]; explosions=[]; particles=[]; powerups=[];
   gameOver=false; freezeAll=false; freezeTimer=0;
   blitzTimer = BLITZ_TIME;
@@ -1097,6 +1170,253 @@ function setupTouchControls() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// AI / BOT BRAIN
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function tickAllBots(dt) {
+  players.forEach(p => {
+    if (!p.alive || !p.isBot) return;
+    const ai = aiStates[p.id];
+    if (!ai) return;
+    const cfg = AI_DIFFICULTY[p.aiDifficulty] || AI_DIFFICULTY.medium;
+
+    // Reaction timer — hard bots react faster
+    ai.reactionTimer -= dt;
+    if (ai.reactionTimer > 0) return;
+    ai.reactionTimer = cfg.reactionMs + Math.random() * cfg.reactionMs * 0.5;
+
+    const {r: pr, c: pc} = getCell(p.x, p.y);
+
+    // ── DANGER CHECK: is the bot in an explosion zone? ──
+    const inDanger = isCellDangerous(pr, pc) || isThreatened(p, cfg.fleeRange);
+    if (inDanger) {
+      ai.state = 'flee';
+    }
+
+    // ── STATE MACHINE ──
+    if (ai.state === 'flee') {
+      const safeCell = findSafeCell(pr, pc, cfg.fleeRange + 2);
+      if (safeCell) {
+        ai.path = bfsPath(pr, pc, safeCell.r, safeCell.c);
+        ai.state = 'fleeing';
+      } else {
+        ai.state = 'wander';
+      }
+    }
+
+    if (ai.state === 'fleeing') {
+      if (!isThreatened(p, cfg.fleeRange) && !isCellDangerous(getCell(p.x,p.y).r, getCell(p.x,p.y).c)) {
+        ai.state = 'wander';
+      }
+    }
+
+    if (ai.state === 'wander' || ai.state === 'hunt') {
+      // Find nearest target (player or destructible wall)
+      const target = findTarget(p, pr, pc, cfg);
+      if (target) {
+        ai.path = bfsPath(pr, pc, target.r, target.c);
+        ai.state = target.isPlayer ? 'hunt' : 'wander';
+      } else {
+        // Random wander
+        const rr = pr + (Math.random()<0.5?-1:1)*(1+Math.floor(Math.random()*3));
+        const rc = pc + (Math.random()<0.5?-1:1)*(1+Math.floor(Math.random()*3));
+        const cr = Math.max(1,Math.min(ROWS-2,rr));
+        const cc = Math.max(1,Math.min(COLS-2,rc));
+        if (grid[cr][cc]===0) ai.path = bfsPath(pr, pc, cr, cc);
+      }
+    }
+
+    // ── BOMB DECISION ──
+    ai.bombCooldown = (ai.bombCooldown||0) - dt;
+    if (ai.bombCooldown <= 0 && p.activeBombs < p.maxBombs && p.bombCooldown <= 0) {
+      const shouldBomb = decideDropBomb(p, pr, pc, cfg);
+      if (shouldBomb) {
+        pendingBombs.add(p.id);
+        ai.bombCooldown = cfg.reactionMs * 3 + Math.random() * 1000;
+        // After bombing, flee!
+        ai.state = 'flee';
+      }
+    }
+  });
+}
+
+function applyBotMovement(p, dt) {
+  const ai = aiStates[p.id];
+  if (!ai) return;
+
+  let inp = blankInput();
+
+  // Follow path
+  if (ai.path && ai.path.length > 0) {
+    const next = ai.path[0];
+    const tx = next.c * CELL + CELL/2;
+    const ty = next.r * CELL + CELL/2;
+    const dx = tx - p.x;
+    const dy = ty - p.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+
+    if (dist < CELL * 0.3) {
+      ai.path.shift(); // reached this waypoint
+    } else {
+      if (Math.abs(dx) > Math.abs(dy)) {
+        inp.right = dx > 0; inp.left = dx < 0;
+      } else {
+        inp.down = dy > 0; inp.up = dy < 0;
+      }
+    }
+  }
+
+  // Stuck detection
+  ai.stuckTimer = (ai.stuckTimer||0) + dt;
+  if (ai.stuckTimer > 600) {
+    const moved = Math.abs(p.x-ai.lastX)+Math.abs(p.y-ai.lastY);
+    if (moved < 2) {
+      // Unstick: clear path, pick new direction
+      ai.path = [];
+      ai.state = 'wander';
+      inp.right = Math.random()>0.5; inp.up = Math.random()>0.5;
+    }
+    ai.lastX = p.x; ai.lastY = p.y;
+    ai.stuckTimer = 0;
+  }
+
+  inputStates[p.id] = inp;
+}
+
+function isCellDangerous(r, c) {
+  // Active explosion
+  for (const exp of explosions) {
+    if (exp.cells.some(ec => ec.r===r && ec.c===c)) return true;
+  }
+  // About to explode (bomb nearby with short fuse)
+  for (const b of bombs) {
+    if (b.timer < 1800) {
+      const reaches = bombReachesCell(b, r, c);
+      if (reaches) return true;
+    }
+  }
+  return false;
+}
+
+function isThreatened(p, range) {
+  const {r, c} = getCell(p.x, p.y);
+  for (const b of bombs) {
+    if (b.timer < BOMB_TIMER_MS * 0.75) {
+      if (Math.abs(b.r-r)+Math.abs(b.c-c) <= range) {
+        if (bombReachesCell(b, r, c)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function bombReachesCell(bomb, tr, tc) {
+  if (bomb.r === tr && bomb.c === tc) return true;
+  const dirs = [{dr:-1,dc:0},{dr:1,dc:0},{dr:0,dc:-1},{dr:0,dc:1}];
+  for (const {dr,dc} of dirs) {
+    for (let i=1; i<=bomb.radius; i++) {
+      const nr=bomb.r+dr*i, nc=bomb.c+dc*i;
+      if (!grid[nr]||grid[nr][nc]===1) break;
+      if (nr===tr && nc===tc) return true;
+      if (grid[nr][nc]===2) break;
+    }
+  }
+  return false;
+}
+
+function findSafeCell(r, c, searchRange) {
+  // BFS outward to find a cell not in danger
+  const visited = new Set([`${r},${c}`]);
+  const queue = [{r, c, dist:0}];
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    if (cur.dist > 0 && !isCellDangerous(cur.r, cur.c)) return cur;
+    if (cur.dist >= searchRange) continue;
+    for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nr=cur.r+dr, nc=cur.c+dc;
+      const key=`${nr},${nc}`;
+      if (visited.has(key)) continue;
+      if (!grid[nr]||grid[nr][nc]!==0) continue;
+      visited.add(key);
+      queue.push({r:nr,c:nc,dist:cur.dist+1});
+    }
+  }
+  return null;
+}
+
+function findTarget(p, pr, pc, cfg) {
+  // Look for nearest human player first (hunt), then destructible wall
+  let best = null, bestDist = 99999;
+
+  // Hunt players
+  players.forEach(target => {
+    if (!target.alive || target.id===p.id || target.isBot) return;
+    const tr=Math.floor(target.y/CELL), tc=Math.floor(target.x/CELL);
+    const d=Math.abs(tr-pr)+Math.abs(tc-pc);
+    if (d < bestDist && d <= cfg.fleeRange*2) { bestDist=d; best={r:tr,c:tc,isPlayer:true}; }
+  });
+  if (best) return best;
+
+  // Target nearby destructible walls
+  for (let dr=-6; dr<=6; dr++) {
+    for (let dc=-6; dc<=6; dc++) {
+      const nr=pr+dr, nc=pc+dc;
+      if (!grid[nr]||grid[nr][nc]!==2) continue;
+      // Aim for a cell adjacent to the wall
+      for (const [ar,ac] of [[nr-1,nc],[nr+1,nc],[nr,nc-1],[nr,nc+1]]) {
+        if (!grid[ar]||grid[ar][ac]!==0) continue;
+        const d=Math.abs(ar-pr)+Math.abs(ac-pc);
+        if (d < bestDist) { bestDist=d; best={r:ar,c:ac,isPlayer:false}; }
+      }
+    }
+  }
+  return best;
+}
+
+function decideDropBomb(p, pr, pc, cfg) {
+  // Drop if adjacent to destructible wall
+  for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+    const nr=pr+dr, nc=pc+dc;
+    if (grid[nr]&&grid[nr][nc]===2) {
+      if (Math.random() < cfg.bombChance * 20) return true;
+    }
+  }
+  // Drop if player nearby
+  for (const target of players) {
+    if (!target.alive||target.id===p.id) continue;
+    const tr=Math.floor(target.y/CELL), tc=Math.floor(target.x/CELL);
+    if (Math.abs(tr-pr)+Math.abs(tc-pc) <= 3) {
+      if (Math.random() < cfg.bombChance * 15) return true;
+    }
+  }
+  // Random chance
+  return Math.random() < cfg.bombChance;
+}
+
+// BFS pathfinding
+function bfsPath(sr, sc, er, ec) {
+  if (sr===er && sc===ec) return [];
+  const visited = new Set([`${sr},${sc}`]);
+  const queue = [{r:sr,c:sc,path:[]}];
+  const MAX_SEARCH = 300;
+  let steps = 0;
+  while (queue.length > 0 && steps++ < MAX_SEARCH) {
+    const cur = queue.shift();
+    for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nr=cur.r+dr, nc=cur.c+dc;
+      const key=`${nr},${nc}`;
+      if (visited.has(key)) continue;
+      if (!grid[nr]||grid[nr][nc]===1||grid[nr][nc]===2) continue;
+      visited.add(key);
+      const newPath=[...cur.path,{r:nr,c:nc}];
+      if (nr===er && nc===ec) return newPath;
+      queue.push({r:nr,c:nc,path:newPath});
+    }
+  }
+  return []; // no path found
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // HOST SIMULATION
 // ═══════════════════════════════════════════════════════════════════════════════
 function startSimulation() {
@@ -1121,6 +1441,11 @@ function simTick() {
     freezeTimer -= dt;
     if (freezeTimer <= 0) { freezeAll=false; freezeTimer=0; }
   }
+
+  // Tick AI bots
+  tickAllBots(dt);
+  // Apply bot movement inputs
+  players.forEach(p => { if(p.alive && p.isBot) applyBotMovement(p, dt); });
 
   players.forEach(p => { if(p.alive) simPlayer(p, dt); });
   simBombs(dt);
@@ -1360,7 +1685,7 @@ function updateHUD(){
   hud.innerHTML=players.map(p=>`
     <div class="hud-card ${!p.alive?'dead':''} ${p.id===mySlot?'me':''}">
       <div class="hud-pip" style="background:${p.color}"></div>
-      <span class="hud-name">${p.name}${p.id===mySlot?'★':''}</span>
+      <span class="hud-name">${p.isBot?'🤖':''}${p.name}${p.id===mySlot?'★':''}</span>
       ${p.shield?'<span class="hud-powerup">🛡️</span>':''}
       ${p.speedBoost>0?'<span class="hud-powerup">👟</span>':''}
       <span class="hud-lives">${'♥'.repeat(Math.max(0,p.lives))}</span>
@@ -1501,6 +1826,8 @@ function quitGame(){
   document.getElementById('lobby-screen').classList.add('active');
   if(peer){peer.destroy();peer=null;}
   isHost=false; mySlot=-1; lobbyPlayers=[];
+  botCount=0; aiStates={};
+  document.getElementById('bot-count-display').textContent='0';
   document.getElementById('host-info').style.display='none';
   document.getElementById('join-info').style.display='none';
   clearErr('host-err'); clearErr('join-err');
