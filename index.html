@@ -418,7 +418,22 @@ header {
         </div>
       </div>
 
-      <button class="btn btn-primary btn-full" onclick="hostGame()">CREATE ROOM</button>
+      <div style="margin-top:14px;">
+        <div class="field-label">AI OPPONENTS</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
+          <button class="mode-btn" onclick="changeBotCount(-1)" style="padding:6px 14px;font-size:1.1rem;">−</button>
+          <span id="bot-count-display" style="font-family:'Share Tech Mono';font-size:1.3rem;color:var(--cyan);min-width:28px;text-align:center;">0</span>
+          <button class="mode-btn" onclick="changeBotCount(1)" style="padding:6px 14px;font-size:1.1rem;">+</button>
+          <span style="font-family:'Share Tech Mono';font-size:0.75rem;color:#444;">BOTS</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button class="mode-btn" onclick="setAIDiff('easy')" id="ai-easy">🟢 EASY</button>
+          <button class="mode-btn active" onclick="setAIDiff('medium')" id="ai-medium">🟡 MEDIUM</button>
+          <button class="mode-btn" onclick="setAIDiff('hard')" id="ai-hard">🔴 HARD</button>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-full" onclick="hostGame()" style="margin-top:14px;">CREATE ROOM</button>
 
       <div id="host-info" style="display:none;margin-top:20px;">
         <div class="field-label">SHARE THIS CODE</div>
@@ -427,20 +442,6 @@ header {
         <div class="card-title" style="margin-bottom:10px;">LOBBY</div>
         <div id="host-players-list" class="players-list"></div>
         <div class="waiting-msg" id="waiting-msg">WAITING FOR PLAYERS...</div>
-        <div style="margin-top:14px;">
-          <div class="field-label">AI OPPONENTS</div>
-          <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
-            <button class="mode-btn" onclick="changeBotCount(-1)" style="padding:6px 12px;font-size:1rem;">−</button>
-            <span id="bot-count-display" style="font-family:'Share Tech Mono';font-size:1.1rem;color:var(--cyan);min-width:24px;text-align:center;">0</span>
-            <button class="mode-btn" onclick="changeBotCount(1)" style="padding:6px 12px;font-size:1rem;">+</button>
-            <span style="font-family:'Share Tech Mono';font-size:0.75rem;color:#444;">BOTS</span>
-          </div>
-          <div style="display:flex;gap:6px;margin-top:8px;" id="ai-diff-btns">
-            <button class="mode-btn" onclick="setAIDiff('easy')" id="ai-easy">🟢 EASY</button>
-            <button class="mode-btn active" onclick="setAIDiff('medium')" id="ai-medium">🟡 MEDIUM</button>
-            <button class="mode-btn" onclick="setAIDiff('hard')" id="ai-hard">🔴 HARD</button>
-          </div>
-        </div>
         <button class="btn btn-primary btn-full" id="start-btn" onclick="hostStartGame()" style="margin-top:16px;display:none;">
           ▶ START GAME
         </button>
@@ -635,7 +636,7 @@ function setAIDiff(d) {
 }
 
 function changeBotCount(delta) {
-  const humanCount = lobbyPlayers.length;
+  const humanCount = Math.max(1, lobbyPlayers.length); // at least 1 (the host)
   const maxBots = MAX_PLAYERS - humanCount;
   botCount = Math.max(0, Math.min(maxBots, botCount + delta));
   document.getElementById('bot-count-display').textContent = botCount;
