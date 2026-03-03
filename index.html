@@ -384,6 +384,9 @@ header {
           <button class="mode-btn" onclick="setMode('blitz')" id="mode-blitz">
             <span class="mode-icon">⚡</span>BLITZ
           </button>
+          <button class="mode-btn" onclick="setMode('open')" id="mode-open">
+            <span class="mode-icon">🏟️</span>OPEN
+          </button>
         </div>
         <div class="mode-desc" id="mode-desc">Classic: 3 lives, standard map, power-ups enabled</div>
       </div>
@@ -470,7 +473,7 @@ header {
     <div class="info-card">
       <div class="info-card-title">MODES</div>
       <div class="info-card-body">
-        💣 Classic: 3 lives<br>💀 Survival: 1 life<br>⚡ Blitz: 90s timer
+        💣 Classic: 3 lives<br>💀 Survival: 1 life<br>⚡ Blitz: 90s timer<br>🏟️ Open: No obstacles
       </div>
     </div>
   </div>
@@ -522,9 +525,9 @@ const ROWS = 27;
 const DEFAULT_BOMB_RADIUS = 3;
 const BOMB_TIMER_MS = 2800;
 const EXPLOSION_DURATION = 650;
-const PLAYER_SPEED = 4.0;
+const PLAYER_SPEED = 4.5;
 const MAX_PLAYERS = 8;
-const TICK_MS = 50;
+const TICK_MS = 33;
 const PING_INTERVAL = 2000;
 
 // Blitz mode timer
@@ -606,11 +609,12 @@ const touchKeys = { up: false, down: false, left: false, right: false, bomb: fal
 const modeDescs = {
   classic:  'Classic: 3 lives, standard map, power-ups enabled',
   survival: 'Survival: 1 life — one hit and you\'re out!',
-  blitz:    'Blitz: 90 second countdown — most kills wins!'
+  blitz:    'Blitz: 90 second countdown — most kills wins!',
+  open:     'Open: No obstacles — nowhere to hide!'
 };
 function setMode(m) {
   selectedMode = m;
-  ['classic','survival','blitz'].forEach(k => {
+  ['classic','survival','blitz','open'].forEach(k => {
     document.getElementById('mode-'+k).classList.toggle('active', k===m);
   });
   document.getElementById('mode-desc').textContent = modeDescs[m];
@@ -978,10 +982,17 @@ function generateMap() {
     grid[r] = [];
     for (let c=0;c<COLS;c++) {
       if (r===0||r===ROWS-1||c===0||c===COLS-1) { grid[r][c]=1; continue; }
-      if (r%2===0&&c%2===0) { grid[r][c]=1; continue; }
+      if (gameMode==='open') { grid[r][c]=0; continue; }
       grid[r][c]=0;
     }
   }
+  if (gameMode==='open') return;
+
+  // Place interesting inner pillar pattern
+  const pattern = Math.floor(Math.random()*5);
+  placePillarPattern(pattern);
+
+  // Place destructible walls (avoid spawn zones)
   const spawnCells = new Set();
   getSpawnPositions().forEach(({r,c}) => {
     [[-1,-1],[-1,0],[-1,1],[0,-1],[0,0],[0,1],[1,-1],[1,0],[1,1],
@@ -997,6 +1008,98 @@ function generateMap() {
       }
     }
   }
+}
+
+function placePillarPattern(pattern) {
+  const mr=ROWS-2, mc=COLS-2;
+  const cy=Math.floor(ROWS/2), cx=Math.floor(COLS/2);
+
+  switch(pattern) {
+    case 0: // Diamond clusters — groups of 4 pillars in diamond shapes
+      for(let r=3;r<ROWS-3;r+=4){
+        for(let c=3;c<COLS-3;c+=6){
+          const off=(Math.floor(r/4)%2)*3;
+          const cc=c+off;
+          if(cc>0&&cc<COLS-1) setPillar(r,cc);
+          if(r-1>0&&cc+1<COLS-1) setPillar(r-1,cc+1);
+          if(r+1<ROWS-1&&cc+1<COLS-1) setPillar(r+1,cc+1);
+          if(cc+2<COLS-1) setPillar(r,cc+2);
+        }
+      }
+      break;
+
+    case 1: // Corridors — horizontal and vertical bars with gaps
+      for(let r=3;r<ROWS-3;r+=5){
+        for(let c=2;c<COLS-2;c++){
+          if(c%7!==0) setPillar(r,c); // horizontal bars with gaps every 7
+        }
+      }
+      for(let c=5;c<COLS-3;c+=8){
+        for(let r=2;r<ROWS-2;r++){
+          if(r%5!==0) setPillar(r,c); // vertical bars with gaps every 5
+        }
+      }
+      break;
+
+    case 2: // Concentric rings
+      const rings = [3, 6, 9];
+      rings.forEach(radius => {
+        for(let r=1;r<ROWS-1;r++){
+          for(let c=1;c<COLS-1;c++){
+            const dr=r-cy, dc=c-cx;
+            const d=Math.max(Math.abs(dr),Math.abs(dc)); // Chebyshev distance
+            if(d===radius && (r+c)%2===0) setPillar(r,c);
+          }
+        }
+      });
+      break;
+
+    case 3: // Scattered rooms — small 3x3 rooms with openings
+      for(let r=3;r<ROWS-4;r+=6){
+        for(let c=4;c<COLS-4;c+=8){
+          const off=(Math.floor(r/6)%2)*4;
+          const cc=c+off;
+          // 3x3 box with a random opening
+          const opening=Math.floor(Math.random()*4);
+          for(let dr=-1;dr<=1;dr++){
+            for(let dc=-1;dc<=1;dc++){
+              if(dr===0&&dc===0) continue; // hollow center
+              const nr=r+dr, nc=cc+dc;
+              // Skip one wall segment for the opening
+              if(opening===0&&dr===-1&&dc===0) continue;
+              if(opening===1&&dr===1&&dc===0) continue;
+              if(opening===2&&dr===0&&dc===-1) continue;
+              if(opening===3&&dr===0&&dc===1) continue;
+              setPillar(nr,nc);
+            }
+          }
+        }
+      }
+      break;
+
+    case 4: // Zigzag — diagonal lines of pillars
+      for(let r=2;r<ROWS-2;r++){
+        for(let c=2;c<COLS-2;c++){
+          const wave = Math.floor(r/3);
+          if(wave%2===0){
+            if((c-r)%5===0) setPillar(r,c);
+          } else {
+            if((c+r)%5===0) setPillar(r,c);
+          }
+        }
+      }
+      break;
+  }
+}
+
+function setPillar(r,c) {
+  if(r<=0||r>=ROWS-1||c<=0||c>=COLS-1) return;
+  // Don't place pillars in spawn zones
+  const spawns = getSpawnPositions();
+  for(const sp of spawns){
+    if(Math.abs(r-sp.r)<=2 && Math.abs(c-sp.c)<=2) return;
+  }
+  grid[r][c]=1;
 }
 
 function getSpawnPositions() {
@@ -1985,9 +2088,17 @@ function renderLoop(ts){
   const dt=Math.min(ts-lastTime2,50);
   lastTime2=ts;
 
-  if(!isHost&&gameRunning){
+  // Smooth visual interpolation for local player (both host and client)
+  if(gameRunning){
     const me=players.find(p=>p.id===mySlot);
-    if(me&&me.alive) clientPredictMe(me,dt);
+    if(me&&me.alive){
+      if(isHost) {
+        // Host: visually interpolate toward target between sim ticks
+        hostVisualInterp(me, dt);
+      } else {
+        clientPredictMe(me,dt);
+      }
+    }
   }
 
   simParticles(dt);
@@ -1995,6 +2106,26 @@ function renderLoop(ts){
   updateCamera(dt);
   render(dt);
   if(gameMode==='blitz') updateRoundTimer();
+}
+
+// Host visual interpolation — smoothly moves the player's render position
+// toward their target tile between sim ticks, without changing authoritative state
+function hostVisualInterp(p, dt) {
+  if(p.frozen>0) return;
+  const tx = p.targetC * CELL + CELL/2;
+  const ty = p.targetR * CELL + CELL/2;
+  const dx = tx - p.x;
+  const dy = ty - p.y;
+  const dist = Math.sqrt(dx*dx+dy*dy);
+  if (dist > 0.5) {
+    const spdMult = 1 + (p.speedBoost||0) * 0.15;
+    const spd = PLAYER_SPEED * spdMult * (dt/16);
+    const step = Math.min(spd, dist);
+    p.x += (dx/dist) * step;
+    p.y += (dy/dist) * step;
+    p.walkTimer=(p.walkTimer||0)+dt;
+    if(p.walkTimer>100){p.walkTimer=0;p.walkFrame=(p.walkFrame+1)%4;}
+  }
 }
 
 function clientPredictMe(p,dt){
