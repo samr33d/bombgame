@@ -540,7 +540,7 @@ const ROWS = 27;
 const DEFAULT_BOMB_RADIUS = 3;
 const BOMB_TIMER_MS = 2800;
 const EXPLOSION_DURATION = 650;
-const PLAYER_SPEED = 3.2;
+const PLAYER_SPEED = 2.6;
 const MAX_PLAYERS = 8;
 const TICK_MS = 33;
 const PING_INTERVAL = 2000;
@@ -1602,7 +1602,7 @@ function simPlayer(p, dt) {
   if (p.frozen > 0) { p.frozen-=dt; }
   else {
     // Grid-based tile movement with carry-over for smoothness
-    const spdMult = 1 + (p.speedBoost||0) * 0.08;
+    const spdMult = 1 + (p.speedBoost||0) * 0.06;
     let budget = PLAYER_SPEED * spdMult * (dt/16);
 
     // Allow multiple tile transitions per frame if speed is high enough
@@ -1826,7 +1826,7 @@ function collectPowerup(p, idx){
   switch(pu.type){
     case 'BLAST':  p.blastRadius=Math.min(p.blastRadius+1,8); break;
     case 'BOMB':   p.maxBombs=Math.min(p.maxBombs+1,5); break;
-    case 'SPEED':  p.speedBoost=Math.min((p.speedBoost||0)+1, 5); break;
+    case 'SPEED':  p.speedBoost=Math.min((p.speedBoost||0)+1, 4); break;
     case 'SHIELD': p.shield=true; break;
     case 'GHOST':  p.ghostTimer=10000; break;
     case 'LIFE':   p.lives=Math.min(p.lives+1,5); break;
@@ -2183,7 +2183,7 @@ function hostVisualInterp(p, dt) {
   const dy = ty - p.y;
   const dist = Math.sqrt(dx*dx+dy*dy);
   if (dist > 0.5) {
-    const spdMult = 1 + (p.speedBoost||0) * 0.08;
+    const spdMult = 1 + (p.speedBoost||0) * 0.06;
     const spd = PLAYER_SPEED * spdMult * (dt/16);
     const step = Math.min(spd, dist);
     p.x += (dx/dist) * step;
@@ -2196,7 +2196,7 @@ function hostVisualInterp(p, dt) {
 function clientPredictMe(p,dt){
   if(p.frozen>0) return;
   const inp=buildMyInput();
-  const spdMult = 1 + (p.speedBoost||0) * 0.08;
+  const spdMult = 1 + (p.speedBoost||0) * 0.06;
   let budget = PLAYER_SPEED*spdMult*(dt/16);
 
   let steps = 0;
