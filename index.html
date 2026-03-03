@@ -506,8 +506,8 @@ header {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 const CELL = 36;
-const COLS = 41;   // smaller map
-const ROWS = 31;
+const COLS = 37;   // ~10% smaller map
+const ROWS = 27;
 const DEFAULT_BOMB_RADIUS = 3;
 const BOMB_TIMER_MS = 2800;
 const EXPLOSION_DURATION = 650;
@@ -1097,6 +1097,8 @@ function resizeViewport() {
 // INPUT
 // ═══════════════════════════════════════════════════════════════════════════════
 let keys2 = {};
+let lastDirAxis = null; // 'h' or 'v' — tracks which axis was pressed most recently
+let prevKeys = { up:false, down:false, left:false, right:false };
 function setupInput() {
   window.addEventListener('keydown', onKey, true);
   window.addEventListener('keyup', onKeyUp, true);
@@ -1106,19 +1108,37 @@ function setupInput() {
 function onKey(e) {
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
   keys2[e.key]=true;
+  // Track which axis was pressed most recently
+  if(e.key==='ArrowUp'||e.key==='w'||e.key==='W'||e.key==='ArrowDown'||e.key==='s'||e.key==='S') lastDirAxis='v';
+  if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A'||e.key==='ArrowRight'||e.key==='d'||e.key==='D') lastDirAxis='h';
   if(e.key==='Escape') quitGame();
 }
 function onKeyUp(e){ keys2[e.key]=false; }
 function clearAllKeys(){ keys2={}; Object.keys(touchKeys).forEach(k=>touchKeys[k]=false); }
 
 function buildMyInput() {
-  return {
-    up:    !!(keys2['ArrowUp']||keys2['w']||keys2['W']||touchKeys.up),
-    down:  !!(keys2['ArrowDown']||keys2['s']||keys2['S']||touchKeys.down),
-    left:  !!(keys2['ArrowLeft']||keys2['a']||keys2['A']||touchKeys.left),
-    right: !!(keys2['ArrowRight']||keys2['d']||keys2['D']||touchKeys.right),
-    bomb:  !!(keys2[' ']||keys2['Enter']||keys2['e']||keys2['E']||touchKeys.bomb),
-  };
+  let up    = !!(keys2['ArrowUp']||keys2['w']||keys2['W']||touchKeys.up);
+  let down  = !!(keys2['ArrowDown']||keys2['s']||keys2['S']||touchKeys.down);
+  let left  = !!(keys2['ArrowLeft']||keys2['a']||keys2['A']||touchKeys.left);
+  let right = !!(keys2['ArrowRight']||keys2['d']||keys2['D']||touchKeys.right);
+  const bomb = !!(keys2[' ']||keys2['Enter']||keys2['e']||keys2['E']||touchKeys.bomb);
+
+  // Track last axis from touch input too
+  const hasV = up || down;
+  const hasH = left || right;
+  const hadV = prevKeys.up || prevKeys.down;
+  const hadH = prevKeys.left || prevKeys.right;
+  if(hasV && !hadV) lastDirAxis='v';
+  if(hasH && !hadH) lastDirAxis='h';
+  prevKeys = {up,down,left,right};
+
+  // Enforce single-axis: if both axes active, keep only the most recent
+  if(hasV && hasH) {
+    if(lastDirAxis==='h') { up=false; down=false; }
+    else { left=false; right=false; }
+  }
+
+  return { up, down, left, right, bomb };
 }
 
 let inputInterval = setInterval(() => {
@@ -1488,6 +1508,8 @@ function simPlayer(p, dt) {
   else {
     if(inp.up) dy=-1; else if(inp.down) dy=1;
     if(inp.left) dx=-1; else if(inp.right) dx=1;
+    // Enforce single-axis movement — no diagonal
+    if(dx!==0 && dy!==0) { dy=0; }
 
     const spd = PLAYER_SPEED * (p.speedBoost>0?1.7:1) * (dt/16);
     if(p.speedBoost>0) p.speedBoost-=dt;
@@ -1522,7 +1544,7 @@ function simPlayer(p, dt) {
 }
 
 function canMove(x,y,player){
-  const r = CELL * 0.28; // tighter hitbox — easier to navigate corridors
+  const r = CELL * 0.22; // tighter hitbox — smoother corridor navigation
   const pts=[{x:x-r,y:y-r},{x:x+r,y:y-r},{x:x-r,y:y+r},{x:x+r,y:y+r}];
   for(const pt of pts){
     const {r:gr,c:gc}=getCell(pt.x,pt.y);
@@ -1540,7 +1562,7 @@ function nearestCellCenter(v){ return Math.round(v/CELL-0.5)*CELL+CELL/2; }
 
 // Corner-rounding movement: nudges player toward corridor alignment when clipping wall corners
 function moveWithAssist(p, dx, dy, spd, collisionFn){
-  const NUDGE = Math.min(spd * 0.85, CELL * 0.13);
+  const NUDGE = Math.min(spd * 1.4, CELL * 0.22);
 
   if(dx!==0){
     const nx=p.x+dx*spd;
@@ -1550,9 +1572,10 @@ function moveWithAssist(p, dx, dy, spd, collisionFn){
       // Blocked horizontally — nudge Y toward nearest row center to slip around corner
       const cy=nearestCellCenter(p.y);
       const diff=cy-p.y;
-      if(Math.abs(diff)>1 && Math.abs(diff)<CELL*0.45){
+      if(Math.abs(diff)>0.5 && Math.abs(diff)<CELL*0.55){
         const step=Math.sign(diff)*Math.min(NUDGE,Math.abs(diff));
         if(collisionFn(nx,p.y+step,p)){ p.x=nx; p.y+=step; }
+        else if(collisionFn(p.x,p.y+step,p)){ p.y+=step; } // nudge even if can't move horizontally yet
       }
     }
   }
@@ -1565,9 +1588,10 @@ function moveWithAssist(p, dx, dy, spd, collisionFn){
       // Blocked vertically — nudge X toward nearest column center
       const cx=nearestCellCenter(p.x);
       const diff=cx-p.x;
-      if(Math.abs(diff)>1 && Math.abs(diff)<CELL*0.45){
+      if(Math.abs(diff)>0.5 && Math.abs(diff)<CELL*0.55){
         const step=Math.sign(diff)*Math.min(NUDGE,Math.abs(diff));
         if(collisionFn(p.x+step,ny,p)){ p.x+=step; p.y=ny; }
+        else if(collisionFn(p.x+step,p.y,p)){ p.x+=step; } // nudge even if can't move vertically yet
       }
     }
   }
@@ -1943,6 +1967,8 @@ function clientPredictMe(p,dt){
   let dx=0,dy=0;
   if(inp.up) dy=-1; else if(inp.down) dy=1;
   if(inp.left) dx=-1; else if(inp.right) dx=1;
+  // Enforce single-axis movement — no diagonal
+  if(dx!==0 && dy!==0) { dy=0; }
   const spd=PLAYER_SPEED*(p.speedBoost>0?1.7:1)*(dt/16);
   moveWithAssist(p, dx, dy, spd, canMovePredicted);
   if(dx<0)p.dir='left'; else if(dx>0)p.dir='right';
@@ -1952,7 +1978,7 @@ function clientPredictMe(p,dt){
 }
 
 function canMovePredicted(x,y,playerId){
-  const r = CELL * 0.28;
+  const r = CELL * 0.22;
   const pts=[{x:x-r,y:y-r},{x:x+r,y:y-r},{x:x-r,y:y+r},{x:x+r,y:y+r}];
   for(const pt of pts){
     const {r:gr,c:gc}=getCell(pt.x,pt.y);
