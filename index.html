@@ -424,6 +424,7 @@ header {
           <button class="mode-btn active" onclick="togglePowerup('SPEED')" id="pu-SPEED">👟 SPEED</button>
           <button class="mode-btn active" onclick="togglePowerup('SHIELD')" id="pu-SHIELD">🛡️ SHIELD</button>
           <button class="mode-btn active" onclick="togglePowerup('GHOST')" id="pu-GHOST">👻 GHOST</button>
+          <button class="mode-btn active" onclick="togglePowerup('SHOVEL')" id="pu-SHOVEL">⛏️ PICK AXE</button>
           <button class="mode-btn active" onclick="togglePowerup('LIFE')" id="pu-LIFE">💎 LIFE</button>
         </div>
       </div>
@@ -480,7 +481,7 @@ header {
     <div class="info-card">
       <div class="info-card-title">POWER-UPS</div>
       <div class="info-card-body">
-        🔥 Bigger blast<br>💣 More bombs<br>👟 Speed up (permanent)<br>🛡️ Shield (1 hit)<br>👻 Ghost (10s, pass walls)<br>💎 Extra life (rare)
+        🔥 Bigger blast<br>💣 More bombs<br>👟 Speed up (permanent)<br>🛡️ Shield (1 hit)<br>👻 Ghost (10s, pass walls)<br>⛏️ Pick axe (10s, break walls)<br>💎 Extra life (rare)
       </div>
     </div>
     <div class="info-card">
@@ -573,6 +574,7 @@ const POWER_UP_TYPES = {
   SPEED:  { icon:'👟', color:'#44ff88', label:'SPEED UP' },
   SHIELD: { icon:'🛡️', color:'#00e5ff', label:'SHIELD' },
   GHOST:  { icon:'👻', color:'#bb88ff', label:'GHOST MODE' },
+  SHOVEL: { icon:'⛏️', color:'#cc8844', label:'PICK AXE' },
   LIFE:   { icon:'💎', color:'#ff44ff', label:'+1 LIFE' },
 };
 const POWERUP_KEYS = Object.keys(POWER_UP_TYPES);
@@ -588,7 +590,7 @@ let clientConns = {};
 let roomCode = null;
 let lobbyPlayers = [];
 let selectedMode = 'classic';
-let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, LIFE:true };
+let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, SHOVEL:true, LIFE:true };
 let friendlyFire = false; // self-damage from own bombs
 let teamMode = false; // false = FFA, true = 2 teams
 
@@ -891,7 +893,7 @@ function broadcastState() {
       id:p.id, x:p.x, y:p.y, alive:p.alive, lives:p.lives,
       gridR:p.gridR, gridC:p.gridC, targetR:p.targetR, targetC:p.targetC,
       dir:p.dir, walkFrame:p.walkFrame, invincible:p.invincible>0,
-      frozen:p.frozen>0, shield:p.shield, speedBoost:p.speedBoost||0, ghostTimer:p.ghostTimer||0,
+      frozen:p.frozen>0, shield:p.shield, speedBoost:p.speedBoost||0, ghostTimer:p.ghostTimer||0, shovelTimer:p.shovelTimer||0,
       blastRadius:p.blastRadius, maxBombs:p.maxBombs, kills:p.kills,
       isBot:p.isBot||false,
     })),
@@ -1000,7 +1002,7 @@ function handleClientReceive(data) {
       if (sp.id === mySlot) {
         lp.alive=sp.alive; lp.lives=sp.lives; lp.invincible=sp.invincible?800:0;
         lp.shield=sp.shield; lp.frozen=sp.frozen?500:0;
-        lp.speedBoost=sp.speedBoost||0; lp.ghostTimer=sp.ghostTimer||0;
+        lp.speedBoost=sp.speedBoost||0; lp.ghostTimer=sp.ghostTimer||0; lp.shovelTimer=sp.shovelTimer||0;
         lp.blastRadius=sp.blastRadius; lp.maxBombs=sp.maxBombs;
         lp.kills=sp.kills||0;
       } else {
@@ -1009,7 +1011,7 @@ function handleClientReceive(data) {
         lp.alive=sp.alive; lp.lives=sp.lives; lp.dir=sp.dir;
         lp.walkFrame=sp.walkFrame; lp.invincible=sp.invincible?800:0;
         lp.frozen=sp.frozen?500:0; lp.shield=sp.shield;
-        lp.ghostTimer=sp.ghostTimer||0;
+        lp.ghostTimer=sp.ghostTimer||0; lp.shovelTimer=sp.shovelTimer||0;
         lp.kills=sp.kills||0;
       }
     });
@@ -1124,7 +1126,7 @@ function initGameState() {
       gridR: sp.r, gridC: sp.c, targetR: sp.r, targetC: sp.c,
       alive: true, lives: startLives,
       bombCooldown: 0, maxBombs: 2, activeBombs: 0,
-      invincible: 0, frozen: 0, shield: false, speedBoost: 0, ghostTimer: 0,
+      invincible: 0, frozen: 0, shield: false, speedBoost: 0, ghostTimer: 0, shovelTimer: 0,
       blastRadius: DEFAULT_BOMB_RADIUS,
       dir:'down', walkFrame:0, walkTimer:0, kills: 0,
     };
@@ -1672,6 +1674,16 @@ function simPlayer(p, dt) {
             // Continue moving with leftover budget (loop again)
             continue;
           }
+          // Shovel: break destructible walls by walking into them
+          if(p.shovelTimer>0 && grid[nr] && grid[nr][nc]===2) {
+            grid[nr][nc]=0;
+            pendingGridChanges.push({r:nr,c:nc,v:0});
+            if(Math.random()<0.2) spawnPowerupAt(nr,nc);
+            spawnParticles(nc*CELL+CELL/2, nr*CELL+CELL/2, '#cc8844', 6);
+            p.targetR = nr;
+            p.targetC = nc;
+            continue;
+          }
         }
         // No input or blocked — stop, consume remaining budget
         p.walkFrame = 0;
@@ -1704,6 +1716,10 @@ function simPlayer(p, dt) {
         }
       }
     }
+  }
+  if(p.shovelTimer>0) {
+    p.shovelTimer-=dt;
+    if(p.shovelTimer<=0) p.shovelTimer=0;
   }
 
   // Check power-up collection
@@ -1850,6 +1866,7 @@ function collectPowerup(p, idx){
     case 'SPEED':  p.speedBoost=Math.min((p.speedBoost||0)+1, 4); break;
     case 'SHIELD': p.shield=true; break;
     case 'GHOST':  p.ghostTimer=10000; break;
+    case 'SHOVEL': p.shovelTimer=10000; break;
     case 'LIFE':   p.lives=Math.min(p.lives+1,5); break;
   }
   updateHUD();
@@ -1992,6 +2009,7 @@ function updateHUD(){
       ${p.shield?'<span class="hud-powerup">🛡️</span>':''}
       ${p.speedBoost>0?`<span class="hud-powerup">👟×${p.speedBoost}</span>`:''}
       ${p.ghostTimer>0?`<span class="hud-powerup">👻${Math.ceil(p.ghostTimer/1000)}s</span>`:''}
+      ${p.shovelTimer>0?`<span class="hud-powerup">⛏️${Math.ceil(p.shovelTimer/1000)}s</span>`:''}
       <span class="hud-lives">${'♥'.repeat(Math.max(0,p.lives))}</span>
       ${gameMode==='blitz'?`<span style="color:var(--text-dim);font-size:0.72rem;margin-left:2px">×${p.kills||0}</span>`:''}
     </div>`;
@@ -2148,7 +2166,7 @@ function quitGame(){
   if(peer){peer.destroy();peer=null;}
   isHost=false; mySlot=-1; lobbyPlayers=[];
   botCount=0; aiStates={};
-  powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, LIFE:true };
+  powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, SHOVEL:true, LIFE:true };
   friendlyFire = false; teamMode = false;
   const ffBtn=document.getElementById('btn-ff');
   if(ffBtn){ffBtn.textContent='🔥 SELF-DAMAGE: OFF';ffBtn.classList.remove('active');}
