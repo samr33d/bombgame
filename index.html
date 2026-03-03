@@ -418,6 +418,14 @@ header {
         </div>
       </div>
 
+      <div class="card-section">
+        <div class="field-label">RULES</div>
+        <div class="mode-select">
+          <button class="mode-btn" onclick="toggleFriendlyFire()" id="btn-ff">🔥 SELF-DAMAGE: OFF</button>
+          <button class="mode-btn" onclick="toggleTeamMode()" id="btn-teams">⚔️ FREE FOR ALL</button>
+        </div>
+      </div>
+
       <button class="btn btn-primary btn-full" onclick="hostGame()">CREATE ROOM</button>
 
       <div id="host-info" style="display:none;">
@@ -571,6 +579,8 @@ let roomCode = null;
 let lobbyPlayers = [];
 let selectedMode = 'classic';
 let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, LIFE:true };
+let friendlyFire = false; // self-damage from own bombs
+let teamMode = false; // false = FFA, true = 2 teams
 
 let grid = [];
 let powerups = [];
@@ -646,6 +656,30 @@ function togglePowerup(key) {
 function getEnabledPowerupKeys() {
   return POWERUP_KEYS.filter(k => powerupToggles[k]);
 }
+
+function toggleFriendlyFire() {
+  friendlyFire = !friendlyFire;
+  const btn = document.getElementById('btn-ff');
+  btn.textContent = friendlyFire ? '🔥 SELF-DAMAGE: ON' : '🔥 SELF-DAMAGE: OFF';
+  btn.classList.toggle('active', friendlyFire);
+  broadcastLobby();
+}
+
+function toggleTeamMode() {
+  teamMode = !teamMode;
+  const btn = document.getElementById('btn-teams');
+  btn.textContent = teamMode ? '🤝 TEAMS (2v2v...)' : '⚔️ FREE FOR ALL';
+  btn.classList.toggle('active', teamMode);
+  renderLobbyList();
+  broadcastLobby();
+}
+
+function getPlayerTeam(playerId) {
+  return playerId % 2; // 0 = Team Red, 1 = Team Blue
+}
+
+const TEAM_COLORS = ['#ff4466','#4488ff'];
+const TEAM_NAMES = ['RED','BLUE'];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PEER SETUP
@@ -762,7 +796,7 @@ function handleHostReceive(peerId, data) {
     reassignSlots();
     renderLobbyList();
     broadcastLobby();
-    clientConns[peerId]?.send({ type:'JOINED', slot: lobbyPlayers.findIndex(p=>p.peerId===peerId), players: lobbyPlayers, mode: selectedMode, powerupToggles });
+    clientConns[peerId]?.send({ type:'JOINED', slot: lobbyPlayers.findIndex(p=>p.peerId===peerId), players: lobbyPlayers, mode: selectedMode, powerupToggles, friendlyFire, teamMode });
     return;
   }
   if (data.type === 'INPUT') {
@@ -779,7 +813,7 @@ function reassignSlots() {
 }
 
 function broadcastLobby() {
-  const msg = { type:'LOBBY_UPDATE', players: lobbyPlayers, mode: selectedMode, powerupToggles };
+  const msg = { type:'LOBBY_UPDATE', players: lobbyPlayers, mode: selectedMode, powerupToggles, friendlyFire, teamMode };
   Object.values(clientConns).forEach(c => c.send(msg));
 }
 
@@ -800,14 +834,18 @@ function renderLobbyList() {
       });
     }
   }
-  el.innerHTML = displayPlayers.map((p,i) => `
+  el.innerHTML = displayPlayers.map((p,i) => {
+    const team = teamMode ? getPlayerTeam(p.id) : -1;
+    const teamBadge = team>=0 ? `<span style="color:${TEAM_COLORS[team]};font-size:0.72rem;margin-left:4px">[${TEAM_NAMES[team]}]</span>` : '';
+    return `
     <div class="player-row">
       <div class="player-pip" style="background:${p.color}"></div>
-      <span style="color:${p.color}">${p.isBot?'🤖 ':''}${escHtml(p.name)}</span>
+      <span style="color:${p.color}">${p.isBot?'🤖 ':''}${escHtml(p.name)}</span>${teamBadge}
       ${i===0&&!p.isBot?'<span class="player-host-badge">HOST</span>':''}
       ${p.isBot?`<span style="color:var(--text-muted);font-size:0.75rem;margin-left:auto">${(AI_DIFFICULTY[p.aiDifficulty]||AI_DIFFICULTY.medium).icon} ${(AI_DIFFICULTY[p.aiDifficulty]||AI_DIFFICULTY.medium).label}</span>`:''}
       ${p.peerId===peer?.id?'<span class="player-you">← YOU</span>':''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
   const startBtn = document.getElementById('start-btn');
   if (startBtn) startBtn.style.display = displayPlayers.length >= 2 ? 'block' : 'none';
 }
@@ -899,15 +937,22 @@ function handleClientReceive(data) {
     lobbyPlayers = data.players;
     gameMode = data.mode || 'classic';
     if (data.powerupToggles) powerupToggles = data.powerupToggles;
+    if (data.friendlyFire !== undefined) friendlyFire = data.friendlyFire;
+    if (data.teamMode !== undefined) teamMode = data.teamMode;
     renderLobbyList();
     const mi = document.getElementById('join-mode-info');
-    if (mi) mi.textContent = 'MODE: ' + (data.mode||'CLASSIC').toUpperCase();
+    const parts = [(data.mode||'CLASSIC').toUpperCase()];
+    if (teamMode) parts.push('TEAMS');
+    if (friendlyFire) parts.push('SELF-DAMAGE');
+    if (mi) mi.textContent = parts.join(' · ');
     return;
   }
   if (data.type === 'LOBBY_UPDATE') {
     lobbyPlayers = data.players;
     gameMode = data.mode || 'classic';
     if (data.powerupToggles) powerupToggles = data.powerupToggles;
+    if (data.friendlyFire !== undefined) friendlyFire = data.friendlyFire;
+    if (data.teamMode !== undefined) teamMode = data.teamMode;
     mySlot = lobbyPlayers.findIndex(p => p.peerId === peer.id);
     renderLobbyList();
     return;
@@ -985,16 +1030,11 @@ function generateMap() {
     for (let c=0;c<COLS;c++) {
       if (r===0||r===ROWS-1||c===0||c===COLS-1) { grid[r][c]=1; continue; }
       if (gameMode==='open') { grid[r][c]=0; continue; }
+      if (r%2===0&&c%2===0) { grid[r][c]=1; continue; }
       grid[r][c]=0;
     }
   }
   if (gameMode==='open') return;
-
-  // Place interesting inner pillar pattern
-  const pattern = Math.floor(Math.random()*5);
-  placePillarPattern(pattern);
-
-  // Place destructible walls (avoid spawn zones)
   const spawnCells = new Set();
   getSpawnPositions().forEach(({r,c}) => {
     [[-1,-1],[-1,0],[-1,1],[0,-1],[0,0],[0,1],[1,-1],[1,0],[1,1],
@@ -1010,98 +1050,6 @@ function generateMap() {
       }
     }
   }
-}
-
-function placePillarPattern(pattern) {
-  const mr=ROWS-2, mc=COLS-2;
-  const cy=Math.floor(ROWS/2), cx=Math.floor(COLS/2);
-
-  switch(pattern) {
-    case 0: // Diamond clusters — groups of 4 pillars in diamond shapes
-      for(let r=3;r<ROWS-3;r+=4){
-        for(let c=3;c<COLS-3;c+=6){
-          const off=(Math.floor(r/4)%2)*3;
-          const cc=c+off;
-          if(cc>0&&cc<COLS-1) setPillar(r,cc);
-          if(r-1>0&&cc+1<COLS-1) setPillar(r-1,cc+1);
-          if(r+1<ROWS-1&&cc+1<COLS-1) setPillar(r+1,cc+1);
-          if(cc+2<COLS-1) setPillar(r,cc+2);
-        }
-      }
-      break;
-
-    case 1: // Corridors — horizontal and vertical bars with gaps
-      for(let r=3;r<ROWS-3;r+=5){
-        for(let c=2;c<COLS-2;c++){
-          if(c%7!==0) setPillar(r,c); // horizontal bars with gaps every 7
-        }
-      }
-      for(let c=5;c<COLS-3;c+=8){
-        for(let r=2;r<ROWS-2;r++){
-          if(r%5!==0) setPillar(r,c); // vertical bars with gaps every 5
-        }
-      }
-      break;
-
-    case 2: // Concentric rings
-      const rings = [3, 6, 9];
-      rings.forEach(radius => {
-        for(let r=1;r<ROWS-1;r++){
-          for(let c=1;c<COLS-1;c++){
-            const dr=r-cy, dc=c-cx;
-            const d=Math.max(Math.abs(dr),Math.abs(dc)); // Chebyshev distance
-            if(d===radius && (r+c)%2===0) setPillar(r,c);
-          }
-        }
-      });
-      break;
-
-    case 3: // Scattered rooms — small 3x3 rooms with openings
-      for(let r=3;r<ROWS-4;r+=6){
-        for(let c=4;c<COLS-4;c+=8){
-          const off=(Math.floor(r/6)%2)*4;
-          const cc=c+off;
-          // 3x3 box with a random opening
-          const opening=Math.floor(Math.random()*4);
-          for(let dr=-1;dr<=1;dr++){
-            for(let dc=-1;dc<=1;dc++){
-              if(dr===0&&dc===0) continue; // hollow center
-              const nr=r+dr, nc=cc+dc;
-              // Skip one wall segment for the opening
-              if(opening===0&&dr===-1&&dc===0) continue;
-              if(opening===1&&dr===1&&dc===0) continue;
-              if(opening===2&&dr===0&&dc===-1) continue;
-              if(opening===3&&dr===0&&dc===1) continue;
-              setPillar(nr,nc);
-            }
-          }
-        }
-      }
-      break;
-
-    case 4: // Zigzag — diagonal lines of pillars
-      for(let r=2;r<ROWS-2;r++){
-        for(let c=2;c<COLS-2;c++){
-          const wave = Math.floor(r/3);
-          if(wave%2===0){
-            if((c-r)%5===0) setPillar(r,c);
-          } else {
-            if((c+r)%5===0) setPillar(r,c);
-          }
-        }
-      }
-      break;
-  }
-}
-
-function setPillar(r,c) {
-  if(r<=0||r>=ROWS-1||c<=0||c>=COLS-1) return;
-  // Don't place pillars in spawn zones
-  const spawns = getSpawnPositions();
-  for(const sp of spawns){
-    if(Math.abs(r-sp.r)<=2 && Math.abs(c-sp.c)<=2) return;
-  }
-  grid[r][c]=1;
 }
 
 function getSpawnPositions() {
@@ -1734,6 +1682,14 @@ function simPlayer(p, dt) {
   if(p.invincible<=0){
     for(const exp of explosions){
       if(exp.cells.some(ec=>ec.r===r&&ec.c===c)){
+        // Self-damage check
+        if(exp.owner===p.id && !friendlyFire) continue;
+        // Team damage check
+        if(teamMode && exp.owner!==undefined && exp.owner!==p.id) {
+          const ownerTeam = getPlayerTeam(exp.owner);
+          const playerTeam = getPlayerTeam(p.id);
+          if(ownerTeam === playerTeam) continue; // teammates don't hurt each other
+        }
         hitPlayer(p, exp.owner); break;
       }
     }
@@ -1894,14 +1850,19 @@ function endBlitz(){
   if(gameOver) return;
   gameOver=true; gameRunning=false;
   clearInterval(simInterval);
-  // Find winner by kills
-  let winner=null;
-  let maxKills=-1;
-  players.forEach(p=>{
-    if((p.kills||0)>maxKills){ maxKills=p.kills||0; winner=p; }
-  });
-  const scoreboard=players.map(p=>({name:p.name,color:p.color,kills:p.kills||0,alive:p.alive})).sort((a,b)=>b.kills-a.kills);
-  const wMsg=winner?{name:winner.name,color:winner.color}:null;
+  const scoreboard=buildScoreboard();
+  let wMsg=null;
+  if(teamMode){
+    // Sum kills by team
+    const teamKills=[0,0];
+    players.forEach(p=>{ teamKills[getPlayerTeam(p.id)]+=(p.kills||0); });
+    const winTeam=teamKills[0]>=teamKills[1]?0:1;
+    wMsg={name:'TEAM '+TEAM_NAMES[winTeam],color:TEAM_COLORS[winTeam]};
+  } else {
+    let maxKills=-1, winner=null;
+    players.forEach(p=>{ if((p.kills||0)>maxKills){ maxKills=p.kills||0; winner=p; } });
+    wMsg=winner?{name:winner.name,color:winner.color}:null;
+  }
   setTimeout(()=>{
     Object.values(clientConns).forEach(c=>c.send({type:'GAME_OVER',winner:wMsg,scoreboard}));
     showGameOver(wMsg,scoreboard);
@@ -1910,17 +1871,50 @@ function endBlitz(){
 
 function checkWin(){
   const alive=players.filter(p=>p.alive);
-  if(alive.length<=1&&!gameOver&&players.length>=2){
-    gameOver=true; gameRunning=false;
-    clearInterval(simInterval);
-    const winner=alive[0]||null;
-    const scoreboard=players.map(p=>({name:p.name,color:p.color,kills:p.kills||0,alive:p.alive})).sort((a,b)=>b.kills-a.kills);
-    setTimeout(()=>{
-      const wMsg=winner?{name:winner.name,color:winner.color}:null;
-      Object.values(clientConns).forEach(c=>c.send({type:'GAME_OVER',winner:wMsg,scoreboard}));
-      showGameOver(wMsg,scoreboard);
-    },800);
+
+  if(teamMode) {
+    // Team mode: check if all alive players are on the same team
+    if(alive.length===0 && !gameOver && players.length>=2) {
+      // Everyone dead — draw
+      gameOver=true; gameRunning=false; clearInterval(simInterval);
+      setTimeout(()=>{
+        const scoreboard=buildScoreboard();
+        Object.values(clientConns).forEach(c=>c.send({type:'GAME_OVER',winner:null,scoreboard}));
+        showGameOver(null,scoreboard);
+      },800);
+    } else if(alive.length>0 && !gameOver && players.length>=2) {
+      const teamsAlive = new Set(alive.map(p=>getPlayerTeam(p.id)));
+      if(teamsAlive.size===1) {
+        const winTeam = [...teamsAlive][0];
+        gameOver=true; gameRunning=false; clearInterval(simInterval);
+        setTimeout(()=>{
+          const scoreboard=buildScoreboard();
+          const wMsg={name:'TEAM '+TEAM_NAMES[winTeam], color:TEAM_COLORS[winTeam]};
+          Object.values(clientConns).forEach(c=>c.send({type:'GAME_OVER',winner:wMsg,scoreboard}));
+          showGameOver(wMsg,scoreboard);
+        },800);
+      }
+    }
+  } else {
+    // FFA: last player standing
+    if(alive.length<=1&&!gameOver&&players.length>=2){
+      gameOver=true; gameRunning=false; clearInterval(simInterval);
+      const winner=alive[0]||null;
+      setTimeout(()=>{
+        const scoreboard=buildScoreboard();
+        const wMsg=winner?{name:winner.name,color:winner.color}:null;
+        Object.values(clientConns).forEach(c=>c.send({type:'GAME_OVER',winner:wMsg,scoreboard}));
+        showGameOver(wMsg,scoreboard);
+      },800);
+    }
   }
+}
+
+function buildScoreboard(){
+  return players.map(p=>({
+    name:p.name, color:p.color, kills:p.kills||0, alive:p.alive,
+    team: teamMode ? getPlayerTeam(p.id) : undefined
+  })).sort((a,b)=>b.kills-a.kills);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1955,16 +1949,20 @@ function simParticles(dt){
 function updateHUD(){
   const hud=document.getElementById('hud');
   if(!hud) return;
-  hud.innerHTML=players.map(p=>`
+  hud.innerHTML=players.map(p=>{
+    const team = teamMode ? getPlayerTeam(p.id) : -1;
+    const teamTag = team>=0 ? `<span style="color:${TEAM_COLORS[team]};font-size:0.65rem;margin-right:2px">[${TEAM_NAMES[team]}]</span>` : '';
+    return `
     <div class="hud-card ${!p.alive?'dead':''} ${p.id===mySlot?'me':''}">
       <div class="hud-pip" style="background:${p.color}"></div>
-      <span class="hud-name">${p.isBot?'🤖':''}${escHtml(p.name)}${p.id===mySlot?'★':''}</span>
+      ${teamTag}<span class="hud-name">${p.isBot?'🤖':''}${escHtml(p.name)}${p.id===mySlot?'★':''}</span>
       ${p.shield?'<span class="hud-powerup">🛡️</span>':''}
       ${p.speedBoost>0?`<span class="hud-powerup">👟×${p.speedBoost}</span>`:''}
       ${p.ghostTimer>0?`<span class="hud-powerup">👻${Math.ceil(p.ghostTimer/1000)}s</span>`:''}
       <span class="hud-lives">${'♥'.repeat(Math.max(0,p.lives))}</span>
       ${gameMode==='blitz'?`<span style="color:var(--text-dim);font-size:0.72rem;margin-left:2px">×${p.kills||0}</span>`:''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function updateRoundTimer(){
@@ -2051,13 +2049,16 @@ function showGameOver(winner,scoreboard){
 
   let scoreHtml='';
   if(scoreboard&&scoreboard.length>0){
-    scoreHtml=`<div style="margin:16px 0;font-size:0.85rem;width:100%;max-width:280px;">
-      ${scoreboard.map((p,i)=>`
+    scoreHtml=`<div style="margin:16px 0;font-size:0.85rem;width:100%;max-width:300px;">
+      ${scoreboard.map((p,i)=>{
+        const teamTag = p.team!==undefined ? `<span style="color:${TEAM_COLORS[p.team]};font-size:0.72rem">[${TEAM_NAMES[p.team]}]</span> ` : '';
+        return `
         <div style="color:${p.color};margin:6px 0;display:flex;gap:10px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">
-          <span style="color:var(--text-muted)">${i+1}.</span> ${escHtml(p.name)}
+          <span style="color:var(--text-muted)">${i+1}.</span> ${teamTag}${escHtml(p.name)}
           <span style="margin-left:auto;color:var(--text-muted)">${p.kills} kills</span>
           ${!p.alive?'<span style="opacity:0.3">💀</span>':'<span style="color:var(--green)">✓</span>'}
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
     </div>`;
   }
 
@@ -2108,6 +2109,11 @@ function quitGame(){
   isHost=false; mySlot=-1; lobbyPlayers=[];
   botCount=0; aiStates={};
   powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, LIFE:true };
+  friendlyFire = false; teamMode = false;
+  const ffBtn=document.getElementById('btn-ff');
+  if(ffBtn){ffBtn.textContent='🔥 SELF-DAMAGE: OFF';ffBtn.classList.remove('active');}
+  const tmBtn=document.getElementById('btn-teams');
+  if(tmBtn){tmBtn.textContent='⚔️ FREE FOR ALL';tmBtn.classList.remove('active');}
   POWERUP_KEYS.forEach(k => { const el=document.getElementById('pu-'+k); if(el) el.classList.add('active'); });
   document.getElementById('bot-count-display').textContent='0';
   document.getElementById('host-info').style.display='none';
