@@ -403,6 +403,17 @@ header {
         </div>
       </div>
 
+      <div class="card-section">
+        <div class="field-label">POWER-UPS</div>
+        <div class="mode-select" id="powerup-toggles">
+          <button class="mode-btn active" onclick="togglePowerup('BLAST')" id="pu-BLAST">🔥 BLAST</button>
+          <button class="mode-btn active" onclick="togglePowerup('BOMB')" id="pu-BOMB">💣 BOMB</button>
+          <button class="mode-btn active" onclick="togglePowerup('SPEED')" id="pu-SPEED">👟 SPEED</button>
+          <button class="mode-btn active" onclick="togglePowerup('SHIELD')" id="pu-SHIELD">🛡️ SHIELD</button>
+          <button class="mode-btn active" onclick="togglePowerup('LIFE')" id="pu-LIFE">💎 LIFE</button>
+        </div>
+      </div>
+
       <button class="btn btn-primary btn-full" onclick="hostGame()">CREATE ROOM</button>
 
       <div id="host-info" style="display:none;">
@@ -447,7 +458,7 @@ header {
     <div class="info-card">
       <div class="info-card-title">POWER-UPS</div>
       <div class="info-card-body">
-        🔥 Bigger blast<br>💣 More bombs<br>👟 Speed boost<br>🛡️ Shield (1 hit)<br>⌛ Freeze others<br>💎 Extra life
+        🔥 Bigger blast<br>💣 More bombs<br>👟 Speed boost<br>🛡️ Shield (1 hit)<br>💎 Extra life
       </div>
     </div>
     <div class="info-card">
@@ -511,7 +522,7 @@ const ROWS = 27;
 const DEFAULT_BOMB_RADIUS = 3;
 const BOMB_TIMER_MS = 2800;
 const EXPLOSION_DURATION = 650;
-const PLAYER_SPEED = 3.0;
+const PLAYER_SPEED = 4.0;
 const MAX_PLAYERS = 8;
 const TICK_MS = 50;
 const PING_INTERVAL = 2000;
@@ -536,7 +547,7 @@ const POWER_UP_TYPES = {
   BOMB:   { icon:'💣', color:'#ffcc00', label:'+1 BOMB' },
   SPEED:  { icon:'👟', color:'#44ff88', label:'SPEED BOOST' },
   SHIELD: { icon:'🛡️', color:'#00e5ff', label:'SHIELD' },
-  FREEZE: { icon:'⌛', color:'#aaccff', label:'FREEZE' },
+
   LIFE:   { icon:'💎', color:'#ff44ff', label:'+1 LIFE' },
 };
 const POWERUP_KEYS = Object.keys(POWER_UP_TYPES);
@@ -552,6 +563,8 @@ let clientConns = {};
 let roomCode = null;
 let lobbyPlayers = [];
 let selectedMode = 'classic';
+let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, LIFE:true };
+let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, LIFE:true };
 
 let grid = [];
 let powerups = [];
@@ -615,6 +628,16 @@ function changeBotCount(delta) {
   botCount = Math.max(0, Math.min(maxBots, botCount + delta));
   document.getElementById('bot-count-display').textContent = botCount;
   renderLobbyList();
+}
+
+function togglePowerup(key) {
+  powerupToggles[key] = !powerupToggles[key];
+  document.getElementById('pu-'+key).classList.toggle('active', powerupToggles[key]);
+  broadcastLobby();
+}
+
+function getEnabledPowerupKeys() {
+  return POWERUP_KEYS.filter(k => powerupToggles[k]);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -732,7 +755,7 @@ function handleHostReceive(peerId, data) {
     reassignSlots();
     renderLobbyList();
     broadcastLobby();
-    clientConns[peerId]?.send({ type:'JOINED', slot: lobbyPlayers.findIndex(p=>p.peerId===peerId), players: lobbyPlayers, mode: selectedMode });
+    clientConns[peerId]?.send({ type:'JOINED', slot: lobbyPlayers.findIndex(p=>p.peerId===peerId), players: lobbyPlayers, mode: selectedMode, powerupToggles });
     return;
   }
   if (data.type === 'INPUT') {
@@ -749,7 +772,7 @@ function reassignSlots() {
 }
 
 function broadcastLobby() {
-  const msg = { type:'LOBBY_UPDATE', players: lobbyPlayers, mode: selectedMode };
+  const msg = { type:'LOBBY_UPDATE', players: lobbyPlayers, mode: selectedMode, powerupToggles };
   Object.values(clientConns).forEach(c => c.send(msg));
 }
 
@@ -797,6 +820,7 @@ function broadcastState() {
     type: 'STATE',
     players: players.map(p => ({
       id:p.id, x:p.x, y:p.y, alive:p.alive, lives:p.lives,
+      gridR:p.gridR, gridC:p.gridC, targetR:p.targetR, targetC:p.targetC,
       dir:p.dir, walkFrame:p.walkFrame, invincible:p.invincible>0,
       frozen:p.frozen>0, shield:p.shield, speedBoost:p.speedBoost||0,
       blastRadius:p.blastRadius, maxBombs:p.maxBombs, kills:p.kills,
@@ -867,6 +891,7 @@ function handleClientReceive(data) {
     mySlot = data.slot;
     lobbyPlayers = data.players;
     gameMode = data.mode || 'classic';
+    if (data.powerupToggles) powerupToggles = data.powerupToggles;
     renderLobbyList();
     const mi = document.getElementById('join-mode-info');
     if (mi) mi.textContent = 'MODE: ' + (data.mode||'CLASSIC').toUpperCase();
@@ -875,6 +900,7 @@ function handleClientReceive(data) {
   if (data.type === 'LOBBY_UPDATE') {
     lobbyPlayers = data.players;
     gameMode = data.mode || 'classic';
+    if (data.powerupToggles) powerupToggles = data.powerupToggles;
     mySlot = lobbyPlayers.findIndex(p => p.peerId === peer.id);
     renderLobbyList();
     return;
@@ -893,6 +919,8 @@ function handleClientReceive(data) {
       const lp = players.find(p=>p.id===sp.id);
       if (!lp) return;
       lp.isBot = sp.isBot||false;
+      lp.gridR=sp.gridR; lp.gridC=sp.gridC;
+      lp.targetR=sp.targetR; lp.targetC=sp.targetC;
       if (sp.id === mySlot) {
         lp.alive=sp.alive; lp.lives=sp.lives; lp.invincible=sp.invincible?800:0;
         lp.shield=sp.shield; lp.frozen=sp.frozen?500:0;
@@ -1012,6 +1040,7 @@ function initGameState() {
       name: lp.name, color: lp.color, dark: lp.dark,
       isBot: !!lp.isBot, aiDifficulty: lp.aiDifficulty || 'medium',
       x: sp.c*CELL+CELL/2, y: sp.r*CELL+CELL/2,
+      gridR: sp.r, gridC: sp.c, targetR: sp.r, targetC: sp.c,
       alive: true, lives: startLives,
       bombCooldown: 0, maxBombs: 2, activeBombs: 0,
       invincible: 0, frozen: 0, shield: false, speedBoost: 0,
@@ -1502,23 +1531,57 @@ function simTick() {
 
 function simPlayer(p, dt) {
   const inp = inputStates[p.id] || blankInput();
-  let dx=0,dy=0;
 
   if (p.frozen > 0) { p.frozen-=dt; }
   else {
-    if(inp.up) dy=-1; else if(inp.down) dy=1;
-    if(inp.left) dx=-1; else if(inp.right) dx=1;
-    // Enforce single-axis movement — no diagonal
-    if(dx!==0 && dy!==0) { dy=0; }
-
+    // Grid-based tile movement
     const spd = PLAYER_SPEED * (p.speedBoost>0?1.7:1) * (dt/16);
     if(p.speedBoost>0) p.speedBoost-=dt;
-    moveWithAssist(p, dx, dy, spd, canMove);
 
-    if(dx<0)p.dir='left'; else if(dx>0)p.dir='right';
-    else if(dy<0)p.dir='up'; else if(dy>0)p.dir='down';
-    if(dx!==0||dy!==0){ p.walkTimer=(p.walkTimer||0)+dt; if(p.walkTimer>130){p.walkTimer=0;p.walkFrame=(p.walkFrame+1)%4;} }
-    else p.walkFrame=0;
+    // Target position in pixels
+    const tx = p.targetC * CELL + CELL/2;
+    const ty = p.targetR * CELL + CELL/2;
+    const dx = tx - p.x;
+    const dy = ty - p.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+
+    if (dist > 1.5) {
+      // Still moving toward target tile — animate
+      const step = Math.min(spd, dist);
+      p.x += (dx/dist) * step;
+      p.y += (dy/dist) * step;
+      p.walkTimer=(p.walkTimer||0)+dt;
+      if(p.walkTimer>130){p.walkTimer=0;p.walkFrame=(p.walkFrame+1)%4;}
+    } else {
+      // Arrived at target — snap and pick next tile
+      p.x = tx;
+      p.y = ty;
+      p.gridR = p.targetR;
+      p.gridC = p.targetC;
+      p.walkFrame = 0;
+
+      // Determine desired direction from input
+      let dr=0, dc=0;
+      if(inp.up) dr=-1; else if(inp.down) dr=1;
+      if(inp.left) dc=-1; else if(inp.right) dc=1;
+      // Enforce single-axis
+      if(dr!==0 && dc!==0) { dr=0; }
+
+      if(dr!==0 || dc!==0) {
+        const nr = p.gridR + dr;
+        const nc = p.gridC + dc;
+        if(canMoveToTile(nr, nc)) {
+          p.targetR = nr;
+          p.targetC = nc;
+          if(dc<0) p.dir='left'; else if(dc>0) p.dir='right';
+          else if(dr<0) p.dir='up'; else if(dr>0) p.dir='down';
+        } else {
+          // Update facing even if blocked
+          if(dc<0) p.dir='left'; else if(dc>0) p.dir='right';
+          else if(dr<0) p.dir='up'; else if(dr>0) p.dir='down';
+        }
+      }
+    }
   }
 
   if(pendingBombs.has(p.id)){
@@ -1543,69 +1606,19 @@ function simPlayer(p, dt) {
   }
 }
 
-function canMove(x,y,player){
-  const r = CELL * 0.22; // tighter hitbox — smoother corridor navigation
-  const pts=[{x:x-r,y:y-r},{x:x+r,y:y-r},{x:x-r,y:y+r},{x:x+r,y:y+r}];
-  for(const pt of pts){
-    const {r:gr,c:gc}=getCell(pt.x,pt.y);
-    if(!grid[gr]) return false;
-    const v=grid[gr][gc];
-    if(v===1||v===2) return false;
-  }
+function canMoveToTile(r, c) {
+  if(!grid[r]) return false;
+  if(grid[r][c]===1 || grid[r][c]===2) return false;
   return true;
 }
 
 function getCell(x,y){ return {r:Math.floor(y/CELL),c:Math.floor(x/CELL)}; }
 
-// Nearest cell center (for bomb snap and corner assist)
-function nearestCellCenter(v){ return Math.round(v/CELL-0.5)*CELL+CELL/2; }
 
-// Corner-rounding movement: nudges player toward corridor alignment when clipping wall corners
-function moveWithAssist(p, dx, dy, spd, collisionFn){
-  const NUDGE = Math.min(spd * 1.4, CELL * 0.22);
-
-  if(dx!==0){
-    const nx=p.x+dx*spd;
-    if(collisionFn(nx,p.y,p)){
-      p.x=nx;
-    } else {
-      // Blocked horizontally — nudge Y toward nearest row center to slip around corner
-      const cy=nearestCellCenter(p.y);
-      const diff=cy-p.y;
-      if(Math.abs(diff)>0.5 && Math.abs(diff)<CELL*0.55){
-        const step=Math.sign(diff)*Math.min(NUDGE,Math.abs(diff));
-        if(collisionFn(nx,p.y+step,p)){ p.x=nx; p.y+=step; }
-        else if(collisionFn(p.x,p.y+step,p)){ p.y+=step; } // nudge even if can't move horizontally yet
-      }
-    }
-  }
-
-  if(dy!==0){
-    const ny=p.y+dy*spd;
-    if(collisionFn(p.x,ny,p)){
-      p.y=ny;
-    } else {
-      // Blocked vertically — nudge X toward nearest column center
-      const cx=nearestCellCenter(p.x);
-      const diff=cx-p.x;
-      if(Math.abs(diff)>0.5 && Math.abs(diff)<CELL*0.55){
-        const step=Math.sign(diff)*Math.min(NUDGE,Math.abs(diff));
-        if(collisionFn(p.x+step,ny,p)){ p.x+=step; p.y=ny; }
-        else if(collisionFn(p.x+step,p.y,p)){ p.x+=step; } // nudge even if can't move vertically yet
-      }
-    }
-  }
-}
 
 function dropBomb(p){
-  // Snap to nearest cell center for intuitive placement
-  let r=Math.round(p.y/CELL-0.5), c=Math.round(p.x/CELL-0.5);
-  r=Math.max(0,Math.min(ROWS-1,r)); c=Math.max(0,Math.min(COLS-1,c));
-  // Fall back to floor-based cell if snapped cell is a wall
-  if(!grid[r]||grid[r][c]!==0){
-    const f=getCell(p.x,p.y);
-    r=f.r; c=f.c;
-  }
+  // Player is grid-aligned, use current grid cell
+  const r = p.gridR, c = p.gridC;
   if(!grid[r]||grid[r][c]!==0) return;
   if(bombs.some(b=>b.r===r&&b.c===c)) return;
   p.activeBombs++;
@@ -1649,11 +1662,14 @@ function simExplosions(dt){ explosions.forEach(e=>e.timer-=dt); explosions=explo
 let puIdCounter=0;
 function spawnPowerupAt(r,c){
   if(powerups.some(p=>p.r===r&&p.c===c)) return;
-  const type=POWERUP_KEYS[Math.floor(Math.random()*POWERUP_KEYS.length)];
+  const enabled = getEnabledPowerupKeys();
+  if(enabled.length===0) return;
+  const type=enabled[Math.floor(Math.random()*enabled.length)];
   powerups.push({r,c,type,id:puIdCounter++,bob:Math.random()*Math.PI*2});
 }
 
 function spawnPowerups(){
+  if(getEnabledPowerupKeys().length===0) return;
   if(Math.random()<0.002&&powerups.length<lobbyPlayers.length*3){
     for(let attempts=0;attempts<20;attempts++){
       const r=1+Math.floor(Math.random()*(ROWS-2));
@@ -1679,11 +1695,6 @@ function collectPowerup(p, idx){
     case 'BOMB':   p.maxBombs=Math.min(p.maxBombs+1,5); break;
     case 'SPEED':  p.speedBoost=5000; break;
     case 'SHIELD': p.shield=true; break;
-    case 'FREEZE':
-      freezeAll=true; freezeTimer=4000;
-      // Freeze all others
-      players.forEach(pl=>{ if(pl.id!==p.id&&pl.alive) pl.frozen=4000; });
-      break;
     case 'LIFE':   p.lives=Math.min(p.lives+1,5); break;
   }
   updateHUD();
@@ -1707,6 +1718,7 @@ function hitPlayer(p, ownerSlot){
     const spawns=getSpawnPositions();
     const sp=spawns[p.id%spawns.length];
     p.x=sp.c*CELL+CELL/2; p.y=sp.r*CELL+CELL/2;
+    p.gridR=sp.r; p.gridC=sp.c; p.targetR=sp.r; p.targetC=sp.c;
     spawnParticles(p.x,p.y,p.color,8);
   }
   updateHUD();
@@ -1928,6 +1940,8 @@ function quitGame(){
   if(peer){peer.destroy();peer=null;}
   isHost=false; mySlot=-1; lobbyPlayers=[];
   botCount=0; aiStates={};
+  powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, LIFE:true };
+  POWERUP_KEYS.forEach(k => { const el=document.getElementById('pu-'+k); if(el) el.classList.add('active'); });
   document.getElementById('bot-count-display').textContent='0';
   document.getElementById('host-info').style.display='none';
   document.getElementById('join-info').style.display='none';
@@ -1964,27 +1978,49 @@ function renderLoop(ts){
 function clientPredictMe(p,dt){
   if(p.frozen>0) return;
   const inp=buildMyInput();
-  let dx=0,dy=0;
-  if(inp.up) dy=-1; else if(inp.down) dy=1;
-  if(inp.left) dx=-1; else if(inp.right) dx=1;
-  // Enforce single-axis movement — no diagonal
-  if(dx!==0 && dy!==0) { dy=0; }
   const spd=PLAYER_SPEED*(p.speedBoost>0?1.7:1)*(dt/16);
-  moveWithAssist(p, dx, dy, spd, canMovePredicted);
-  if(dx<0)p.dir='left'; else if(dx>0)p.dir='right';
-  else if(dy<0)p.dir='up'; else if(dy>0)p.dir='down';
-  if(dx!==0||dy!==0){ p.walkTimer=(p.walkTimer||0)+dt; if(p.walkTimer>130){p.walkTimer=0;p.walkFrame=(p.walkFrame+1)%4;} }
-  else p.walkFrame=0;
+
+  // Target position in pixels
+  const tx = p.targetC * CELL + CELL/2;
+  const ty = p.targetR * CELL + CELL/2;
+  const dx = tx - p.x;
+  const dy = ty - p.y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+
+  if (dist > 1.5) {
+    const step = Math.min(spd, dist);
+    p.x += (dx/dist) * step;
+    p.y += (dy/dist) * step;
+    p.walkTimer=(p.walkTimer||0)+dt;
+    if(p.walkTimer>130){p.walkTimer=0;p.walkFrame=(p.walkFrame+1)%4;}
+  } else {
+    p.x = tx;
+    p.y = ty;
+    p.gridR = p.targetR;
+    p.gridC = p.targetC;
+    p.walkFrame = 0;
+
+    let dr=0, dc=0;
+    if(inp.up) dr=-1; else if(inp.down) dr=1;
+    if(inp.left) dc=-1; else if(inp.right) dc=1;
+    if(dr!==0 && dc!==0) { dr=0; }
+
+    if(dr!==0 || dc!==0) {
+      const nr = p.gridR + dr;
+      const nc = p.gridC + dc;
+      if(canMoveToTilePredicted(nr, nc)) {
+        p.targetR = nr;
+        p.targetC = nc;
+      }
+      if(dc<0) p.dir='left'; else if(dc>0) p.dir='right';
+      else if(dr<0) p.dir='up'; else if(dr>0) p.dir='down';
+    }
+  }
 }
 
-function canMovePredicted(x,y,playerId){
-  const r = CELL * 0.22;
-  const pts=[{x:x-r,y:y-r},{x:x+r,y:y-r},{x:x-r,y:y+r},{x:x+r,y:y+r}];
-  for(const pt of pts){
-    const {r:gr,c:gc}=getCell(pt.x,pt.y);
-    if(!grid[gr]) return false;
-    if(grid[gr][gc]===1||grid[gr][gc]===2) return false;
-  }
+function canMoveToTilePredicted(r, c) {
+  if(!grid[r]) return false;
+  if(grid[r][c]===1 || grid[r][c]===2) return false;
   return true;
 }
 
