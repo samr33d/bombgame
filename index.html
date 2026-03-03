@@ -6,29 +6,29 @@
 <title>BOMB GAME: RELOADED</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg: #060608;
-  --surface: #0d0d12;
-  --surface2: #131318;
-  --border: #1a1a24;
-  --border-light: #26263a;
-  --text: #f0f0f5;
-  --text-dim: #a0a0b8;
-  --text-muted: #686880;
-  --accent: #ff4444;
-  --accent-dim: rgba(255,68,68,0.15);
-  --gold: #00e861;
-  --gold-dim: rgba(0,232,97,0.12);
-  --cyan: #2baaff;
-  --cyan-dim: rgba(43,170,255,0.12);
-  --green: #00e861;
-  --green-dim: rgba(0,232,97,0.15);
-  --orange: #ff6b35;
-  --pink: #ff5ca0;
-  --purple: #9b6bff;
-  --radius: 6px;
+  --bg: #0e0e10;
+  --surface: #1a1a1e;
+  --surface2: #222226;
+  --border: #2a2a30;
+  --border-light: #3a3a42;
+  --text: #f0f0f0;
+  --text-dim: #a8a8b0;
+  --text-muted: #68686e;
+  --accent: #ff3b30;
+  --accent-dim: rgba(255,59,48,0.15);
+  --gold: #ffd60a;
+  --gold-dim: rgba(255,214,10,0.12);
+  --cyan: #00d4ff;
+  --cyan-dim: rgba(0,212,255,0.12);
+  --green: #30d158;
+  --green-dim: rgba(48,209,88,0.15);
+  --blue: #3478f6;
+  --orange: #ff6b2c;
+  --radius: 14px;
+  --radius-sm: 10px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -36,7 +36,7 @@
 html, body {
   width: 100%; height: 100%;
   background: var(--bg);
-  font-family: 'Geist Mono', monospace;
+  font-family: 'Space Grotesk', sans-serif;
   color: var(--text);
   overflow-x: hidden;
   overscroll-behavior: none;
@@ -44,29 +44,31 @@ html, body {
 
 /* ── HEADER ── */
 header {
-  width: 100%; padding: 16px 24px;
+  width: 100%; padding: 18px 28px;
   display: flex; align-items: center; justify-content: space-between;
   border-bottom: 1px solid var(--border);
   position: relative; z-index: 100;
   background: var(--bg);
 }
 .logo {
-  font-size: clamp(0.7rem, 2vw, 1rem);
-  font-weight: 700; letter-spacing: 5px;
+  font-size: clamp(0.8rem, 2vw, 1.05rem);
+  font-weight: 700; letter-spacing: 3px;
   color: var(--gold);
   display: flex; align-items: center; gap: 10px;
 }
 .logo .bomb-icon { font-size: 1.3em; }
-.logo .sub { color: var(--text-muted); font-size: 0.6em; letter-spacing: 3px; display: block; margin-top: 2px; }
+.logo .sub { color: var(--text-muted); font-size: 0.58em; letter-spacing: 2px; display: block; margin-top: 2px; font-weight: 500; }
 
-.header-right { display: flex; align-items: center; gap: 14px; }
+.header-right { display: flex; align-items: center; gap: 12px; }
 .status-badge {
-  font-size: 0.75rem; letter-spacing: 2px;
-  padding: 5px 12px; border: 1px solid var(--border); color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem; letter-spacing: 1.5px; font-weight: 600;
+  padding: 6px 14px; border: 1.5px solid var(--border); color: var(--text-muted);
   border-radius: var(--radius); transition: all 0.3s;
+  background: var(--surface);
 }
-.status-badge.connected { border-color: var(--green); color: var(--green); }
-.ping-display { font-size: 0.8rem; color: var(--text-muted); }
+.status-badge.connected { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+.ping-display { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
 .ping-display.good { color: var(--green); }
 .ping-display.ok { color: var(--gold); }
 .ping-display.bad { color: var(--accent); }
@@ -74,127 +76,199 @@ header {
 /* ── SCREENS ── */
 .screen {
   display: none; flex-direction: column; align-items: center;
-  width: 100%; padding: 32px 20px; position: relative; z-index: 1;
+  width: 100%; padding: 28px 20px 48px; position: relative; z-index: 1;
 }
 .screen.active { display: flex; }
 
 /* ── LOBBY ── */
 .lobby-title {
-  text-align: center; margin-bottom: 32px;
-  font-size: clamp(0.72rem, 1.2vw, 0.85rem);
-  color: var(--text-muted); letter-spacing: 3px;
+  text-align: center; margin-bottom: 28px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(0.62rem, 1vw, 0.72rem);
+  color: var(--text-muted); letter-spacing: 2px; font-weight: 500;
 }
 .lobby-wrap {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
-  max-width: 860px; width: 100%;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  max-width: 880px; width: 100%;
 }
+
+/* ── CARDS — color-blocked ── */
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px; padding: 32px; position: relative;
+  background: var(--gold);
+  color: #000;
+  border: none;
+  border-radius: var(--radius); padding: 32px; position: relative;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.3);
+}
+.card:nth-child(2) {
+  background: var(--blue);
+  color: #fff;
 }
 .card-glow { display: none; }
 .card::before { display: none; }
 .card-title {
-  font-size: 0.85rem; letter-spacing: 3px; margin-bottom: 24px;
-  color: var(--cyan); text-transform: uppercase;
-  padding-bottom: 16px; border-bottom: 1px solid var(--border);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem; letter-spacing: 2px; margin-bottom: 24px;
+  color: rgba(0,0,0,0.5);
+  text-transform: uppercase; font-weight: 700;
+  padding-bottom: 16px; border-bottom: 1.5px solid rgba(0,0,0,0.1);
+}
+.card:nth-child(2) .card-title {
+  color: rgba(255,255,255,0.5);
+  border-bottom-color: rgba(255,255,255,0.15);
 }
 
-.field-label { font-size: 0.8rem; color: var(--text-muted); letter-spacing: 2px; margin-bottom: 8px; }
-.text-input {
-  font-family: 'Geist Mono', monospace; font-size: 1.1rem;
-  background: var(--bg); border: 1px solid var(--border); color: var(--text);
-  padding: 12px 14px; width: 100%; outline: none; letter-spacing: 2px;
-  border-radius: var(--radius); transition: border-color 0.2s, box-shadow 0.2s;
+.field-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem; color: rgba(0,0,0,0.45);
+  letter-spacing: 1.5px; margin-bottom: 8px; font-weight: 600;
+  text-transform: uppercase;
 }
-.text-input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px var(--cyan-dim); }
-.text-input::placeholder { color: var(--text-muted); opacity: 0.6; }
+.card:nth-child(2) .field-label { color: rgba(255,255,255,0.45); }
+
+.text-input {
+  font-family: 'Space Grotesk', sans-serif; font-size: 1.05rem;
+  background: rgba(0,0,0,0.08); border: 1.5px solid rgba(0,0,0,0.12);
+  color: #000; padding: 13px 14px; width: 100%; outline: none; letter-spacing: 1px;
+  border-radius: var(--radius-sm); transition: border-color 0.2s, box-shadow 0.2s;
+  font-weight: 600;
+}
+.text-input:focus { border-color: rgba(0,0,0,0.3); box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
+.text-input::placeholder { color: rgba(0,0,0,0.25); }
+.card:nth-child(2) .text-input {
+  background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.15);
+  color: #fff;
+}
+.card:nth-child(2) .text-input:focus { border-color: rgba(255,255,255,0.35); box-shadow: 0 0 0 3px rgba(255,255,255,0.08); }
+.card:nth-child(2) .text-input::placeholder { color: rgba(255,255,255,0.25); }
 
 .card-section { margin-top: 24px; }
 
-.mode-select { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.mode-select { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
 .mode-btn {
-  font-family: 'Geist Mono', monospace; font-size: 0.78rem; letter-spacing: 1px;
-  padding: 10px 16px; border: 1px solid var(--border); color: var(--text-dim);
-  background: transparent; cursor: pointer; border-radius: var(--radius); transition: all 0.15s;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; letter-spacing: 0.5px;
+  padding: 8px 13px; border: 1.5px solid rgba(0,0,0,0.12);
+  color: rgba(0,0,0,0.55); font-weight: 600;
+  background: rgba(0,0,0,0.04); cursor: pointer; border-radius: var(--radius-sm); transition: all 0.12s;
 }
-.mode-btn:hover { border-color: var(--border-light); color: var(--text); background: var(--surface2); }
-.mode-btn.active { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-dim); }
-.mode-btn .mode-icon { font-size: 1.1em; display: block; margin-bottom: 2px; }
-.mode-desc { font-size: 0.8rem; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
+.mode-btn:hover { border-color: rgba(0,0,0,0.2); color: rgba(0,0,0,0.75); background: rgba(0,0,0,0.06); }
+.mode-btn.active {
+  border-color: rgba(0,0,0,0.5); color: #000;
+  background: rgba(0,0,0,0.1);
+}
+.card:nth-child(2) .mode-btn {
+  border-color: rgba(255,255,255,0.15); color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.04);
+}
+.card:nth-child(2) .mode-btn:hover { border-color: rgba(255,255,255,0.25); color: rgba(255,255,255,0.7); }
+.card:nth-child(2) .mode-btn.active {
+  border-color: rgba(255,255,255,0.5); color: #fff; background: rgba(255,255,255,0.1);
+}
+.mode-btn .mode-icon { font-size: 1em; display: inline; margin-right: 1px; }
+.mode-desc {
+  font-size: 0.75rem; color: rgba(0,0,0,0.35); margin-top: 10px; line-height: 1.5;
+}
+.card:nth-child(2) .mode-desc { color: rgba(255,255,255,0.3); }
 
-.bot-controls { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
-.bot-count { font-size: 1.4rem; color: var(--cyan); min-width: 32px; text-align: center; }
-.bot-label { font-size: 0.8rem; color: var(--text-muted); }
-.diff-select { display: flex; gap: 8px; margin-top: 10px; }
+.bot-controls { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.bot-count { font-size: 1.5rem; color: #000; min-width: 32px; text-align: center; font-weight: 700; }
+.card:nth-child(2) .bot-count { color: #fff; }
+.bot-label { font-size: 0.75rem; color: rgba(0,0,0,0.4); font-weight: 500; }
+.card:nth-child(2) .bot-label { color: rgba(255,255,255,0.4); }
+.diff-select { display: flex; gap: 6px; margin-top: 10px; }
 
 .btn {
-  font-family: 'Geist Mono', monospace; font-weight: 700;
-  font-size: 0.82rem; letter-spacing: 2px; padding: 14px 24px;
+  font-family: 'Space Grotesk', sans-serif; font-weight: 700;
+  font-size: 0.78rem; letter-spacing: 1.5px; padding: 14px 24px;
   border: none; cursor: pointer; text-transform: uppercase;
-  border-radius: var(--radius); transition: all 0.12s;
-  display: inline-block; margin-top: 20px;
+  border-radius: var(--radius-sm); transition: all 0.12s;
+  display: inline-block; margin-top: 22px;
 }
-.btn-primary { background: var(--accent); color: #fff; }
-.btn-primary:hover { background: #e0264a; transform: translateY(-1px); box-shadow: 0 4px 20px var(--accent-dim); }
+.btn-primary {
+  background: #000; color: var(--gold);
+}
+.btn-primary:hover { background: #1a1a1a; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
 .btn-primary:active { transform: translateY(1px); }
-.btn-secondary { background: transparent; color: var(--cyan); border: 1px solid var(--cyan); }
-.btn-secondary:hover { background: var(--cyan-dim); }
+.card:nth-child(2) .btn-primary { background: #fff; color: var(--blue); }
+.card:nth-child(2) .btn-primary:hover { background: #f0f0f0; }
+.btn-secondary {
+  background: rgba(255,255,255,0.15); color: #fff; border: 1.5px solid rgba(255,255,255,0.25);
+}
+.btn-secondary:hover { background: rgba(255,255,255,0.2); }
 .btn-full { width: 100%; text-align: center; }
 
-.divider { height: 1px; background: var(--border); margin: 24px 0; }
+.divider { height: 1.5px; background: rgba(0,0,0,0.08); margin: 24px 0; }
+.card:nth-child(2) .divider { background: rgba(255,255,255,0.1); }
 
 .room-code-display {
-  font-size: 2.4rem; letter-spacing: 10px;
-  color: var(--gold); background: var(--bg);
-  border: 1px dashed rgba(0,232,97,0.3); border-radius: var(--radius);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 2.4rem; letter-spacing: 10px; font-weight: 700;
+  color: #000; background: rgba(0,0,0,0.06);
+  border: 2px dashed rgba(0,0,0,0.15); border-radius: var(--radius-sm);
   padding: 16px; text-align: center; margin: 10px 0 8px;
   cursor: pointer; transition: background 0.15s;
 }
-.room-code-display:hover { background: var(--gold-dim); }
-.copy-hint { font-size: 0.72rem; color: var(--text-muted); letter-spacing: 2px; text-align: center; margin-bottom: 20px; }
+.room-code-display:hover { background: rgba(0,0,0,0.1); }
+.copy-hint { font-size: 0.68rem; color: rgba(0,0,0,0.35); letter-spacing: 1.5px; text-align: center; margin-bottom: 20px; font-weight: 600; }
 
 .copied-toast {
   position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-  background: var(--green); color: #000; padding: 10px 24px;
-  font-size: 0.78rem; letter-spacing: 2px; opacity: 0; transition: opacity 0.3s;
+  background: var(--green); color: #000; padding: 10px 28px;
+  font-size: 0.75rem; letter-spacing: 1.5px; opacity: 0; transition: opacity 0.3s;
   pointer-events: none; z-index: 10000; border-radius: var(--radius); font-weight: 700;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
 }
 .copied-toast.show { opacity: 1; }
 
 .players-list { margin-top: 12px; }
 .player-row {
   display: flex; align-items: center; gap: 12px;
-  padding: 10px 0; border-bottom: 1px solid var(--border);
-  font-size: 0.9rem; animation: playerIn 0.3s ease-out;
+  padding: 10px 0; border-bottom: 1px solid rgba(0,0,0,0.08);
+  font-size: 0.88rem; animation: playerIn 0.3s ease-out; font-weight: 600;
 }
+.card:nth-child(2) .player-row { border-bottom-color: rgba(255,255,255,0.08); }
 @keyframes playerIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
 .player-pip { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.player-you { color: var(--text-muted); font-size: 0.75rem; margin-left: auto; }
-.player-host-badge { color: var(--gold); font-size: 0.75rem; margin-left: auto; }
+.player-you { color: rgba(0,0,0,0.35); font-size: 0.72rem; margin-left: auto; }
+.card:nth-child(2) .player-you { color: rgba(255,255,255,0.35); }
+.player-host-badge { color: rgba(0,0,0,0.6); font-size: 0.72rem; margin-left: auto; font-weight: 700; }
 
 .waiting-msg {
-  font-size: 0.8rem; color: var(--text-muted);
-  letter-spacing: 2px; margin-top: 16px; animation: pulse 2s ease-in-out infinite;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem; color: rgba(0,0,0,0.3);
+  letter-spacing: 1.5px; margin-top: 16px; animation: pulse 2s ease-in-out infinite; font-weight: 500;
 }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-.error-msg { font-size: 0.8rem; color: var(--accent); margin-top: 10px; min-height: 1.2rem; }
+.card:nth-child(2) .waiting-msg { color: rgba(255,255,255,0.3); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.error-msg { font-size: 0.75rem; color: #cc2200; margin-top: 10px; min-height: 1.2rem; font-weight: 600; }
+.card:nth-child(2) .error-msg { color: #ff8888; }
 
-/* ── INFO GRID ── */
+/* ── INFO GRID — colored blocks ── */
 .info-grid {
-  max-width: 860px; width: 100%; margin-top: 32px;
-  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
+  max-width: 880px; width: 100%; margin-top: 20px;
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
 }
 .info-card {
-  background: var(--surface); border: 1px solid var(--border);
-  padding: 20px; border-radius: 8px;
+  border: none; padding: 24px; border-radius: var(--radius);
+  box-shadow: 0 2px 16px rgba(0,0,0,0.2);
 }
+.info-card:nth-child(1) { background: var(--orange); color: #fff; }
+.info-card:nth-child(2) { background: var(--surface); color: var(--text); }
+.info-card:nth-child(3) { background: var(--green); color: #000; }
+
 .info-card-title {
-  font-size: 0.75rem; color: var(--cyan); letter-spacing: 3px;
-  margin-bottom: 14px; font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem; letter-spacing: 2px; text-transform: uppercase;
+  margin-bottom: 14px; font-weight: 700;
 }
-.info-card-body { font-size: 0.8rem; color: var(--text-dim); line-height: 2.1; }
+.info-card:nth-child(1) .info-card-title { color: rgba(255,255,255,0.6); }
+.info-card:nth-child(2) .info-card-title { color: var(--text-muted); }
+.info-card:nth-child(3) .info-card-title { color: rgba(0,0,0,0.45); }
+
+.info-card-body { font-size: 0.78rem; line-height: 2.1; font-weight: 500; }
+.info-card:nth-child(1) .info-card-body { color: rgba(255,255,255,0.85); }
+.info-card:nth-child(2) .info-card-body { color: var(--text-dim); }
+.info-card:nth-child(3) .info-card-body { color: rgba(0,0,0,0.7); }
 
 /* ── GAME SCREEN ── */
 #game-screen {
@@ -209,42 +283,42 @@ header {
 .hud-card {
   background: var(--surface); border: 1px solid var(--border);
   padding: 6px 12px; display: flex; align-items: center; gap: 6px;
-  font-size: 0.75rem; min-width: 90px; transition: all 0.3s;
-  border-radius: 4px;
+  font-size: 0.72rem; min-width: 90px; transition: all 0.3s;
+  border-radius: var(--radius-sm); font-weight: 500;
 }
 .hud-card.dead { opacity: 0.15; }
-.hud-card.me { border-color: var(--cyan); background: var(--cyan-dim); }
+.hud-card.me { border-color: var(--gold); background: var(--gold-dim); }
 .hud-pip { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.hud-name { color: var(--text-dim); font-size: 0.75rem; }
+.hud-name { color: var(--text-dim); font-size: 0.72rem; }
 .hud-lives { color: var(--gold); margin-left: auto; }
-.hud-powerup { font-size: 0.8rem; }
+.hud-powerup { font-size: 0.78rem; }
 
 #canvas-wrap {
   position: relative; border: 1px solid var(--border); overflow: hidden;
-  border-radius: 4px; box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  border-radius: var(--radius-sm); box-shadow: 0 8px 48px rgba(0,0,0,0.6);
 }
 #game-canvas { display: block; image-rendering: pixelated; }
 
 #overlay {
   position: absolute; inset: 0; display: none;
   flex-direction: column; align-items: center; justify-content: center;
-  background: rgba(8,8,15,0.94); z-index: 20; padding: 24px;
-  backdrop-filter: blur(6px);
+  background: rgba(14,14,16,0.94); z-index: 20; padding: 24px;
+  backdrop-filter: blur(8px);
 }
 #overlay.visible { display: flex; }
-.ov-title { font-size: clamp(0.9rem,3vw,1.5rem); color: var(--gold); margin-bottom: 16px; text-align: center; letter-spacing: 3px; }
+.ov-title { font-size: clamp(0.9rem,3vw,1.5rem); color: var(--gold); margin-bottom: 16px; text-align: center; letter-spacing: 2px; font-weight: 700; }
 .ov-sub { font-size: 1rem; color: var(--text-dim); margin-bottom: 20px; text-align: center; }
 .countdown-num {
-  font-size: clamp(3rem, 12vw, 6rem); color: var(--accent);
-  text-shadow: 0 0 40px var(--accent-dim);
+  font-size: clamp(3rem, 12vw, 6rem); color: var(--gold); font-weight: 700;
+  text-shadow: 0 0 50px var(--gold-dim);
   animation: popIn 0.7s cubic-bezier(0.175,0.885,0.32,1.275);
 }
 @keyframes popIn { 0%{transform:scale(2.5) rotate(-10deg);opacity:0} 100%{transform:scale(1) rotate(0);opacity:1} }
 
 .powerup-popup {
   position: absolute; pointer-events: none; z-index: 30;
-  font-family: 'Geist Mono', monospace; font-size: 0.75rem; font-weight: 700;
-  text-shadow: 0 2px 6px rgba(0,0,0,0.95);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 700;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.9);
   animation: popupFloat 1.5s ease-out forwards; white-space: nowrap;
 }
 @keyframes popupFloat { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-50px)} }
@@ -263,12 +337,12 @@ header {
 }
 .dpad-btn {
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  border-radius: 12px; display: flex; align-items: center; justify-content: center;
   font-size: 1.2rem; color: var(--text-dim); cursor: pointer; transition: all 0.05s;
   -webkit-tap-highlight-color: transparent;
 }
 .dpad-btn:active, .dpad-btn.pressed {
-  background: var(--cyan-dim); border-color: var(--cyan); color: var(--cyan);
+  background: var(--gold-dim); border-color: var(--gold); color: var(--gold);
 }
 .dpad-center { background: transparent; border: none; }
 .bomb-btn {
@@ -285,9 +359,9 @@ header {
 }
 .touch-right { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .quit-touch-btn {
-  font-family: 'Geist Mono', monospace; font-size: 0.75rem; color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-muted);
   background: transparent; border: 1px solid var(--border); padding: 8px 16px;
-  cursor: pointer; border-radius: var(--radius);
+  cursor: pointer; border-radius: var(--radius-sm); font-weight: 600;
 }
 
 /* ── KILL FEED ── */
@@ -296,29 +370,31 @@ header {
   display: flex; flex-direction: column; gap: 5px; pointer-events: none;
 }
 .kill-feed-item {
-  font-size: 0.78rem; color: #fff;
-  background: rgba(0,0,0,0.8); padding: 4px 10px; border-radius: 4px;
+  font-size: 0.75rem; color: #fff; font-weight: 600;
+  background: rgba(0,0,0,0.85); padding: 5px 12px; border-radius: var(--radius-sm);
   animation: killFeedIn 0.3s ease-out, killFeedOut 0.5s ease-in 2.5s forwards;
 }
 @keyframes killFeedIn { from{opacity:0;transform:translateX(-16px)} to{opacity:1;transform:translateX(0)} }
 @keyframes killFeedOut { to{opacity:0} }
 
 #round-timer {
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.9rem; color: var(--text-dim);
-  text-align: center; letter-spacing: 3px; margin: 6px 0; transition: color 0.3s;
+  text-align: center; letter-spacing: 2px; margin: 6px 0; transition: color 0.3s; font-weight: 600;
 }
 #round-timer.urgent { color: var(--accent); animation: pulse 0.5s ease-in-out infinite; }
 
 .bottom-bar {
-  margin-top: 8px; font-size: 0.78rem;
-  color: var(--text-muted); text-align: center; letter-spacing: 2px;
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 8px; font-size: 0.72rem;
+  color: var(--text-muted); text-align: center; letter-spacing: 1.5px; font-weight: 500;
 }
 
 .stats-overlay {
   position: absolute; top: 10px; right: 10px; z-index: 25;
-  background: rgba(0,0,0,0.8); padding: 10px 14px;
-  border: 1px solid var(--border); border-radius: 6px; pointer-events: none;
-  font-size: 0.78rem; color: var(--text-dim); min-width: 100px;
+  background: rgba(0,0,0,0.85); padding: 10px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); pointer-events: none;
+  font-size: 0.75rem; color: var(--text-dim); min-width: 100px;
 }
 
 /* ── RESPONSIVE ── */
@@ -333,24 +409,64 @@ header {
 }
 @media (max-width: 480px) {
   header { padding: 12px 14px; }
-  .logo { font-size: 0.68rem; letter-spacing: 3px; gap: 6px; }
+  .logo { font-size: 0.72rem; letter-spacing: 2px; gap: 6px; }
   .logo .bomb-icon { font-size: 1.1em; }
   .logo .sub { display: none; }
-  .status-badge { font-size: 0.68rem; padding: 4px 10px; }
-  .screen { padding: 20px 14px; }
+  .status-badge { font-size: 0.62rem; padding: 5px 10px; }
+  .screen { padding: 16px 12px 40px; }
   .card { padding: 24px 20px; }
-  .hud-card { padding: 4px 8px; gap: 4px; min-width: 65px; font-size: 0.68rem; }
-  .hud-name { font-size: 0.68rem; }
+  .hud-card { padding: 4px 8px; gap: 4px; min-width: 65px; font-size: 0.65rem; }
+  .hud-name { font-size: 0.65rem; }
   .dpad { grid-template-columns: repeat(3, 48px); grid-template-rows: repeat(3, 48px); }
-  .info-card { padding: 16px; }
+  .info-card { padding: 18px; }
 }
+/* ── SVG Icons ── */
+.icon {
+  display: inline-block; vertical-align: middle;
+  width: 1em; height: 1em;
+  fill: currentColor; flex-shrink: 0;
+}
+.icon-sm { width: 0.85em; height: 0.85em; }
+.icon-lg { width: 1.4em; height: 1.4em; }
+.icon-xl { width: 1.8em; height: 1.8em; }
+.logo .icon { width: 1.3em; height: 1.3em; }
+.mode-btn .icon { width: 1em; height: 1em; margin-right: 2px; }
+.bomb-btn .icon { width: 2em; height: 2em; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
+.dpad-btn .icon { width: 1em; height: 1em; }
 </style>
+
 </head>
 <body>
 
+<!-- SVG Icon Sprite Sheet -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-bomb" viewBox="0 0 24 24"><circle cx="12" cy="14" r="8" fill="currentColor"/><path d="M12 6V2M14 3l2-1M10 3L8 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="11" r="2.5" fill="currentColor" opacity="0.3"/></symbol>
+  <symbol id="i-fire" viewBox="0 0 24 24"><path d="M12 2c0 4-4 6-4 10a6 6 0 0012 0c0-4-4-6-4-10-1 2-3 3-4 0z" fill="currentColor"/><path d="M12 22a3.5 3.5 0 003.5-3.5c0-2-1.5-3-2-4.5-.5 1.5-2 2.5-2 4.5A3.5 3.5 0 0012 22z" fill="currentColor" opacity="0.4"/></symbol>
+  <symbol id="i-speed" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2L4 6v5c0 5.25 3.4 10.15 8 11.25 4.6-1.1 8-6 8-11.25V6L12 2z" fill="currentColor"/><path d="M12 2L4 6v5c0 5.25 3.4 10.15 8 11.25 4.6-1.1 8-6 8-11.25V6L12 2z" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"/></symbol>
+  <symbol id="i-ghost" viewBox="0 0 24 24"><path d="M12 2C7.58 2 4 5.58 4 10v12l2.5-3 2.5 3 3-3 3 3 2.5-3L20 22V10c0-4.42-3.58-8-8-8z" fill="currentColor"/><circle cx="9.5" cy="10" r="1.5" fill="currentColor" opacity="0.3"/><circle cx="14.5" cy="10" r="1.5" fill="currentColor" opacity="0.3"/></symbol>
+  <symbol id="i-gem" viewBox="0 0 24 24"><path d="M6 3h12l4 7-10 12L2 10z" fill="currentColor"/><path d="M2 10h20M12 22L6 3M12 22l6-19M8 10l4-7 4 7" fill="none" stroke="currentColor" stroke-width="0.8" opacity="0.25"/></symbol>
+  <symbol id="i-skull" viewBox="0 0 24 24"><path d="M12 2C7 2 3 6 3 11c0 3.5 2 6.5 5 8v2a1 1 0 001 1h6a1 1 0 001-1v-2c3-1.5 5-4.5 5-8 0-5-4-9-9-9z" fill="currentColor"/><circle cx="9" cy="10" r="2" fill="currentColor" opacity="0.3"/><circle cx="15" cy="10" r="2" fill="currentColor" opacity="0.3"/><path d="M10 16v3M12 16v3M14 16v3" stroke="currentColor" stroke-width="1.2" opacity="0.3" stroke-linecap="round"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></symbol>
+  <symbol id="i-arena" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 12h20M12 4v16" stroke="currentColor" stroke-width="1" opacity="0.3"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-swords" viewBox="0 0 24 24"><path d="M6 2l2 8-4 4 2 2 4-4 8 2-2-2-6-6 2-6H6zM18 2l-2 8 4 4-2 2-4-4-2 1 2 2 4-4 4-4-2-2-2-3z" fill="currentColor"/></symbol>
+  <symbol id="i-handshake" viewBox="0 0 24 24"><path d="M2 11l4-4 3 1 3-3 3 1 3-3 4 4-4 4-3-1-3 3-3-1-3 3z" fill="currentColor"/><path d="M7 15l-3 3M17 15l3 3M10 18l-1 2M14 18l1 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="12" rx="2" fill="currentColor"/><circle cx="12" cy="5" r="2" fill="currentColor"/><line x1="12" y1="7" x2="12" y2="8" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="13" r="1.5" fill="currentColor" opacity="0.3"/><circle cx="15" cy="13" r="1.5" fill="currentColor" opacity="0.3"/><path d="M9 17h6" stroke="currentColor" stroke-width="1.2" opacity="0.3" stroke-linecap="round"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="currentColor"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></symbol>
+  <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M6 2h12v6a6 6 0 01-12 0V2z" fill="currentColor"/><path d="M6 4H2v2a4 4 0 004 4M18 4h4v2a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 14h6v2H9zM10 16h4v4h-4zM8 20h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 5l7 7H5z" fill="currentColor"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 19l7-7H5z" fill="currentColor"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M5 12l7-7v14z" fill="currentColor"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M19 12l-7-7v14z" fill="currentColor"/></symbol>
+</svg>
+
 <header>
   <div class="logo">
-    <span class="bomb-icon">💣</span>
+    <span class="bomb-icon"><svg class="icon"><use href="#i-bomb"/></svg></span>
     <div>
       BOMB GAME: RELOADED
       <span class="sub">ONLINE MULTIPLAYER</span>
@@ -371,7 +487,7 @@ header {
   <div class="lobby-wrap">
     <!-- HOST -->
     <div class="card">
-      <div class="card-title">⚡ HOST A GAME</div>
+      <div class="card-title"><svg class="icon" style="color:var(--gold)"><use href="#i-bolt"/></svg> HOST A GAME</div>
       <div class="field-label">YOUR NAME</div>
       <input class="text-input" id="host-name" maxlength="8" placeholder="ARAGORN" />
 
@@ -379,16 +495,16 @@ header {
         <div class="field-label">GAME MODE</div>
         <div class="mode-select">
           <button class="mode-btn active" onclick="setMode('classic')" id="mode-classic">
-            <span class="mode-icon">💣</span>CLASSIC
+            <svg class="icon"><use href="#i-bomb"/></svg> CLASSIC
           </button>
           <button class="mode-btn" onclick="setMode('survival')" id="mode-survival">
-            <span class="mode-icon">💀</span>SURVIVAL
+            <svg class="icon"><use href="#i-skull"/></svg> SURVIVAL
           </button>
           <button class="mode-btn" onclick="setMode('blitz')" id="mode-blitz">
-            <span class="mode-icon">⚡</span>BLITZ
+            <svg class="icon"><use href="#i-bolt"/></svg> BLITZ
           </button>
           <button class="mode-btn" onclick="setMode('open')" id="mode-open">
-            <span class="mode-icon">🏟️</span>OPEN
+            <svg class="icon"><use href="#i-arena"/></svg> OPEN
           </button>
         </div>
         <div class="mode-desc" id="mode-desc">Classic: 3 lives, standard map, power-ups enabled</div>
@@ -403,29 +519,29 @@ header {
           <span class="bot-label">BOTS</span>
         </div>
         <div class="diff-select">
-          <button class="mode-btn" onclick="setAIDiff('easy')" id="ai-easy">🟢 EASY</button>
-          <button class="mode-btn active" onclick="setAIDiff('medium')" id="ai-medium">🟡 MEDIUM</button>
-          <button class="mode-btn" onclick="setAIDiff('hard')" id="ai-hard">🔴 HARD</button>
+          <button class="mode-btn" onclick="setAIDiff('easy')" id="ai-easy">● EASY</button>
+          <button class="mode-btn active" onclick="setAIDiff('medium')" id="ai-medium">● MED</button>
+          <button class="mode-btn" onclick="setAIDiff('hard')" id="ai-hard">● HARD</button>
         </div>
       </div>
 
       <div class="card-section">
         <div class="field-label">POWER-UPS</div>
         <div class="mode-select" id="powerup-toggles">
-          <button class="mode-btn active" onclick="togglePowerup('BLAST')" id="pu-BLAST">🔥 BLAST</button>
-          <button class="mode-btn active" onclick="togglePowerup('BOMB')" id="pu-BOMB">💣 BOMB</button>
-          <button class="mode-btn active" onclick="togglePowerup('SPEED')" id="pu-SPEED">👟 SPEED</button>
-          <button class="mode-btn active" onclick="togglePowerup('SHIELD')" id="pu-SHIELD">🛡️ SHIELD</button>
-          <button class="mode-btn active" onclick="togglePowerup('GHOST')" id="pu-GHOST">👻 GHOST</button>
-          <button class="mode-btn active" onclick="togglePowerup('LIFE')" id="pu-LIFE">💎 LIFE</button>
+          <button class="mode-btn active" onclick="togglePowerup('BLAST')" id="pu-BLAST"><svg class="icon"><use href="#i-fire"/></svg> BLAST</button>
+          <button class="mode-btn active" onclick="togglePowerup('BOMB')" id="pu-BOMB"><svg class="icon"><use href="#i-bomb"/></svg> BOMB</button>
+          <button class="mode-btn active" onclick="togglePowerup('SPEED')" id="pu-SPEED"><svg class="icon"><use href="#i-speed"/></svg> SPEED</button>
+          <button class="mode-btn active" onclick="togglePowerup('SHIELD')" id="pu-SHIELD"><svg class="icon"><use href="#i-shield"/></svg> SHIELD</button>
+          <button class="mode-btn active" onclick="togglePowerup('GHOST')" id="pu-GHOST"><svg class="icon"><use href="#i-ghost"/></svg> GHOST</button>
+          <button class="mode-btn active" onclick="togglePowerup('LIFE')" id="pu-LIFE"><svg class="icon"><use href="#i-gem"/></svg> LIFE</button>
         </div>
       </div>
 
       <div class="card-section">
         <div class="field-label">RULES</div>
         <div class="mode-select">
-          <button class="mode-btn" onclick="toggleFriendlyFire()" id="btn-ff">🔥 SELF-DAMAGE: OFF</button>
-          <button class="mode-btn" onclick="toggleTeamMode()" id="btn-teams">⚔️ FREE FOR ALL</button>
+          <button class="mode-btn" onclick="toggleFriendlyFire()" id="btn-ff"><svg class="icon"><use href="#i-fire"/></svg> SELF-DAMAGE: OFF</button>
+          <button class="mode-btn" onclick="toggleTeamMode()" id="btn-teams"><svg class="icon"><use href="#i-swords"/></svg> FREE FOR ALL</button>
         </div>
       </div>
 
@@ -440,7 +556,7 @@ header {
         <div id="host-players-list" class="players-list"></div>
         <div class="waiting-msg" id="waiting-msg">WAITING FOR PLAYERS...</div>
         <button class="btn btn-primary btn-full" id="start-btn" onclick="hostStartGame()" style="display:none;">
-          ▶ START GAME
+          <svg class="icon"><use href="#i-play"/></svg> START GAME
         </button>
       </div>
       <div class="error-msg" id="host-err"></div>
@@ -448,7 +564,7 @@ header {
 
     <!-- JOIN -->
     <div class="card">
-      <div class="card-title">🔗 JOIN A GAME</div>
+      <div class="card-title"><svg class="icon"><use href="#i-link"/></svg> JOIN A GAME</div>
       <div class="field-label">YOUR NAME</div>
       <input class="text-input" id="join-name" maxlength="8" placeholder="LEGOLAS" />
       <div class="card-section">
@@ -473,7 +589,7 @@ header {
     <div class="info-card">
       <div class="info-card-title">POWER-UPS</div>
       <div class="info-card-body">
-        🔥 Bigger blast<br>💣 More bombs<br>👟 Speed up (permanent)<br>🛡️ Shield (1 hit)<br>👻 Ghost (10s, pass walls)<br>💎 Extra life (rare)
+        <svg class="icon icon-sm"><use href="#i-fire"/></svg> Bigger blast<br><svg class="icon icon-sm"><use href="#i-bomb"/></svg> More bombs<br><svg class="icon icon-sm"><use href="#i-speed"/></svg> Speed up (permanent)<br><svg class="icon icon-sm"><use href="#i-shield"/></svg> Shield (1 hit)<br><svg class="icon icon-sm"><use href="#i-ghost"/></svg> Ghost (10s, pass walls)<br><svg class="icon icon-sm"><use href="#i-gem"/></svg> Extra life (rare)
       </div>
     </div>
     <div class="info-card">
@@ -485,7 +601,7 @@ header {
     <div class="info-card">
       <div class="info-card-title">MODES</div>
       <div class="info-card-body">
-        💣 Classic: 3 lives<br>💀 Survival: 1 life<br>⚡ Blitz: 90s timer<br>🏟️ Open: No obstacles
+        <svg class="icon icon-sm"><use href="#i-bomb"/></svg> Classic: 3 lives<br><svg class="icon icon-sm"><use href="#i-skull"/></svg> Survival: 1 life<br><svg class="icon icon-sm"><use href="#i-bolt"/></svg> Blitz: 90s timer<br><svg class="icon icon-sm"><use href="#i-arena"/></svg> Open: No obstacles
       </div>
     </div>
   </div>
@@ -510,18 +626,18 @@ header {
   <div class="touch-row">
     <div class="dpad" id="dpad">
       <div></div>
-      <div class="dpad-btn" id="btn-up" data-dir="up">▲</div>
+      <div class="dpad-btn" id="btn-up" data-dir="up"><svg class="icon"><use href="#i-up"/></svg></div>
       <div></div>
-      <div class="dpad-btn" id="btn-left" data-dir="left">◀</div>
+      <div class="dpad-btn" id="btn-left" data-dir="left"><svg class="icon"><use href="#i-left"/></svg></div>
       <div class="dpad-center"></div>
-      <div class="dpad-btn" id="btn-right" data-dir="right">▶</div>
+      <div class="dpad-btn" id="btn-right" data-dir="right"><svg class="icon"><use href="#i-right"/></svg></div>
       <div></div>
-      <div class="dpad-btn" id="btn-down" data-dir="down">▼</div>
+      <div class="dpad-btn" id="btn-down" data-dir="down"><svg class="icon"><use href="#i-down"/></svg></div>
       <div></div>
     </div>
     <div class="touch-right">
-      <div class="bomb-btn" id="touch-bomb-btn">💣</div>
-      <button class="quit-touch-btn" onclick="quitGame()">◀ QUIT</button>
+      <div class="bomb-btn" id="touch-bomb-btn"><svg class="icon" style="color:#fff"><use href="#i-bomb"/></svg></div>
+      <button class="quit-touch-btn" onclick="quitGame()"><svg class="icon icon-sm"><use href="#i-back"/></svg> QUIT</button>
     </div>
   </div>
 </div>
@@ -547,9 +663,9 @@ const BLITZ_TIME = 90000;
 
 // AI difficulty configs
 const AI_DIFFICULTY = {
-  easy:   { reactionMs:800,  bombChance:0.006, fleeRange:3, label:'EASY',   icon:'🟢' },
-  medium: { reactionMs:400,  bombChance:0.018, fleeRange:5, label:'MEDIUM', icon:'🟡' },
-  hard:   { reactionMs:150,  bombChance:0.035, fleeRange:7, label:'HARD',   icon:'🔴' },
+  easy:   { reactionMs:800,  bombChance:0.006, fleeRange:3, label:'EASY',   icon:'●', iconColor:'#30d158' },
+  medium: { reactionMs:400,  bombChance:0.018, fleeRange:5, label:'MEDIUM', icon:'●', iconColor:'#ffd60a' },
+  hard:   { reactionMs:150,  bombChance:0.035, fleeRange:7, label:'HARD',   icon:'●', iconColor:'#ff3b30' },
 };
 const PLAYER_NAMES = ['ARAGORN','LEGOLAS','GIMLI','GANDALF','FRODO','SAM','MERRY','PIPPIN','BOROMIR','FARAMIR','EOWYN','THEODEN','ELROND','ARWEN','TREEBD'];
 function randomName(){ return PLAYER_NAMES[Math.floor(Math.random()*PLAYER_NAMES.length)]; }
@@ -561,14 +677,21 @@ const COLORS = ['#ff4444','#2baaff','#00e861','#ffb320','#9b6bff','#ff5ca0','#00
 const DARKS  = ['#801818','#0e4a80','#006830','#805a10','#4a2e80','#80264a','#006850','#80300e'];
 
 const POWER_UP_TYPES = {
-  BLAST:  { icon:'🔥', color:'#ff6b35', label:'BIGGER BLAST' },
-  BOMB:   { icon:'💣', color:'#ffcc00', label:'+1 BOMB' },
-  SPEED:  { icon:'👟', color:'#44ff88', label:'SPEED UP' },
-  SHIELD: { icon:'🛡️', color:'#00e5ff', label:'SHIELD' },
-  GHOST:  { icon:'👻', color:'#bb88ff', label:'GHOST MODE' },
-  LIFE:   { icon:'💎', color:'#ff44ff', label:'+1 LIFE' },
+  BLAST:  { svgId:'i-fire',   color:'#ff6b35', label:'BIGGER BLAST' },
+  BOMB:   { svgId:'i-bomb',   color:'#ffcc00', label:'+1 BOMB' },
+  SPEED:  { svgId:'i-speed',  color:'#44ff88', label:'SPEED UP' },
+  SHIELD: { svgId:'i-shield', color:'#00e5ff', label:'SHIELD' },
+  GHOST:  { svgId:'i-ghost',  color:'#bb88ff', label:'GHOST MODE' },
+  LIFE:   { svgId:'i-gem',    color:'#ff44ff', label:'+1 LIFE' },
 };
 const POWERUP_KEYS = Object.keys(POWER_UP_TYPES);
+
+// SVG icon helper — returns inline SVG HTML string
+function svgIcon(id, cls, style) {
+  const c = cls || '';
+  const s = style ? ` style="${style}"` : '';
+  return `<svg class="icon ${c}"${s}><use href="#${id}"/></svg>`;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STATE
@@ -663,7 +786,7 @@ function getEnabledPowerupKeys() {
 function toggleFriendlyFire() {
   friendlyFire = !friendlyFire;
   const btn = document.getElementById('btn-ff');
-  btn.textContent = friendlyFire ? '🔥 SELF-DAMAGE: ON' : '🔥 SELF-DAMAGE: OFF';
+  btn.innerHTML = friendlyFire ? svgIcon('i-fire') + ' SELF-DAMAGE: ON' : svgIcon('i-fire') + ' SELF-DAMAGE: OFF';
   btn.classList.toggle('active', friendlyFire);
   broadcastLobby();
 }
@@ -671,7 +794,7 @@ function toggleFriendlyFire() {
 function toggleTeamMode() {
   teamMode = !teamMode;
   const btn = document.getElementById('btn-teams');
-  btn.textContent = teamMode ? '🤝 TEAMS (2v2v...)' : '⚔️ FREE FOR ALL';
+  btn.innerHTML = teamMode ? svgIcon('i-handshake') + ' TEAMS (2v2v...)' : svgIcon('i-swords') + ' FREE FOR ALL';
   btn.classList.toggle('active', teamMode);
   reassignSlots();
   renderLobbyList();
@@ -855,9 +978,9 @@ function renderLobbyList() {
     return `
     <div class="player-row">
       <div class="player-pip" style="background:${p.color}"></div>
-      <span style="color:${p.color}">${p.isBot?'🤖 ':''}${escHtml(p.name)}</span>${teamBadge}
+      <span style="color:${p.color}">${p.isBot?svgIcon('i-bot','icon-sm','color:'+p.color)+' ':''}${escHtml(p.name)}</span>${teamBadge}
       ${i===0&&!p.isBot?'<span class="player-host-badge">HOST</span>':''}
-      ${p.isBot?`<span style="color:var(--text-muted);font-size:0.75rem;margin-left:auto">${(AI_DIFFICULTY[p.aiDifficulty]||AI_DIFFICULTY.medium).icon} ${(AI_DIFFICULTY[p.aiDifficulty]||AI_DIFFICULTY.medium).label}</span>`:''}
+      ${p.isBot?`<span style="color:var(--text-muted);font-size:0.75rem;margin-left:auto"><span style="color:${(AI_DIFFICULTY[p.aiDifficulty]||AI_DIFFICULTY.medium).iconColor}">${(AI_DIFFICULTY[p.aiDifficulty]||AI_DIFFICULTY.medium).icon}</span> ${(AI_DIFFICULTY[p.aiDifficulty]||AI_DIFFICULTY.medium).label}</span>`:''}
       ${p.peerId===peer?.id?'<span class="player-you">← YOU</span>':''}
     </div>`;
   }).join('');
@@ -1958,11 +2081,11 @@ function updateHUD(){
     return `
     <div class="hud-card ${!p.alive?'dead':''} ${p.id===mySlot?'me':''}">
       <div class="hud-pip" style="background:${p.color}"></div>
-      ${teamTag}<span class="hud-name">${p.isBot?'🤖':''}${escHtml(p.name)}${p.id===mySlot?'★':''}</span>
-      ${p.shield?'<span class="hud-powerup">🛡️</span>':''}
-      ${p.speedBoost>0?`<span class="hud-powerup">👟×${p.speedBoost}</span>`:''}
-      ${p.ghostTimer>0?`<span class="hud-powerup">👻${Math.ceil(p.ghostTimer/1000)}s</span>`:''}
-      <span class="hud-lives">${'♥'.repeat(Math.max(0,p.lives))}</span>
+      ${teamTag}<span class="hud-name">${p.isBot?svgIcon('i-bot','icon-sm'):''}${escHtml(p.name)}${p.id===mySlot?svgIcon('i-star','icon-sm','color:var(--gold)'):''}</span>
+      ${p.shield?'<span class="hud-powerup">'+svgIcon('i-shield','icon-sm','color:#00e5ff')+'</span>':''}
+      ${p.speedBoost>0?'<span class="hud-powerup">'+svgIcon('i-speed','icon-sm','color:#44ff88')+'×'+p.speedBoost+'</span>':''}
+      ${p.ghostTimer>0?'<span class="hud-powerup">'+svgIcon('i-ghost','icon-sm','color:#bb88ff')+Math.ceil(p.ghostTimer/1000)+'s</span>':''}
+      <span class="hud-lives">${svgIcon('i-heart','icon-sm').repeat(Math.max(0,p.lives))}</span>
       ${gameMode==='blitz'?`<span style="color:var(--text-dim);font-size:0.72rem;margin-left:2px">×${p.kills||0}</span>`:''}
     </div>`;
   }).join('');
@@ -2000,7 +2123,7 @@ function showPowerupPopup(x,y,type){
   div.style.color=pu.color;
   div.style.left=((x-viewport.x)*scale-40)+'px';
   div.style.top=((y-viewport.y)*scale-30)+'px';
-  div.textContent=`${pu.icon} ${pu.label}`;
+  div.innerHTML=`${svgIcon(pu.svgId,'icon-sm')} ${pu.label}`;
   wrap.appendChild(div);
   setTimeout(()=>div.remove(),1600);
 }
@@ -2059,24 +2182,24 @@ function showGameOver(winner,scoreboard){
         <div style="color:${p.color};margin:6px 0;display:flex;gap:10px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">
           <span style="color:var(--text-muted)">${i+1}.</span> ${teamTag}${escHtml(p.name)}
           <span style="margin-left:auto;color:var(--text-muted)">${p.kills} kills</span>
-          ${!p.alive?'<span style="opacity:0.3">💀</span>':'<span style="color:var(--green)">✓</span>'}
+          ${!p.alive?svgIcon('i-skull','icon-sm','color:var(--text-muted);opacity:0.3'):'<span style="color:var(--green)">✓</span>'}
         </div>`;
       }).join('')}
     </div>`;
   }
 
   const btns = `<div style="display:flex;gap:10px;margin-top:8px;">
-    ${isHost?`<button class="btn btn-primary" onclick="doRematch()">▶ REMATCH</button>`:'<div class="ov-sub">WAITING FOR HOST...</div>'}
+    ${isHost?`<button class="btn btn-primary" onclick="doRematch()">${svgIcon('i-play')} REMATCH</button>`:'<div class="ov-sub">WAITING FOR HOST...</div>'}
     <button class="btn btn-secondary" onclick="quitGame()">MENU</button>
   </div>`;
 
   if(winner){
     content.innerHTML=`
-      <div class="ov-title" style="color:${winner.color}">🏆 ${escHtml(winner.name)} WINS!</div>
+      <div class="ov-title" style="color:${winner.color}">${svgIcon('i-trophy','icon-lg')} ${escHtml(winner.name)} WINS!</div>
       ${scoreHtml}${btns}`;
   } else {
     content.innerHTML=`
-      <div class="ov-title">💀 DRAW</div>
+      <div class="ov-title">${svgIcon('i-skull','icon-lg')} DRAW</div>
       ${scoreHtml}${btns}`;
   }
 }
@@ -2114,9 +2237,9 @@ function quitGame(){
   powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, LIFE:true };
   friendlyFire = false; teamMode = false;
   const ffBtn=document.getElementById('btn-ff');
-  if(ffBtn){ffBtn.textContent='🔥 SELF-DAMAGE: OFF';ffBtn.classList.remove('active');}
+  if(ffBtn){ffBtn.innerHTML=svgIcon('i-fire')+' SELF-DAMAGE: OFF';ffBtn.classList.remove('active');}
   const tmBtn=document.getElementById('btn-teams');
-  if(tmBtn){tmBtn.textContent='⚔️ FREE FOR ALL';tmBtn.classList.remove('active');}
+  if(tmBtn){tmBtn.innerHTML=svgIcon('i-swords')+' FREE FOR ALL';tmBtn.classList.remove('active');}
   POWERUP_KEYS.forEach(k => { const el=document.getElementById('pu-'+k); if(el) el.classList.add('active'); });
   document.getElementById('bot-count-display').textContent='0';
   document.getElementById('host-info').style.display='none';
@@ -2347,16 +2470,36 @@ function render(dt){
     const px2=pu.c*CELL+CELL/2, py2=pu.r*CELL+CELL/2;
     const bob=Math.sin(now2*0.003+(pu.bob||0))*3;
     const info=POWER_UP_TYPES[pu.type];
+    const cy=py2+bob;
     ctx.save();
     ctx.shadowColor=info.color; ctx.shadowBlur=14;
     ctx.globalAlpha=0.9;
     // Glow ring
     ctx.strokeStyle=info.color; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.arc(px2,py2+bob,CELL*0.32,0,Math.PI*2); ctx.stroke();
-    // Icon
-    ctx.font=`${CELL*0.5}px serif`;
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(info.icon,px2,py2+bob);
+    ctx.beginPath(); ctx.arc(px2,cy,CELL*0.32,0,Math.PI*2); ctx.stroke();
+    // Draw geometric icon based on type
+    ctx.fillStyle=info.color;
+    const sz=CELL*0.22;
+    if(pu.type==='BLAST'){
+      // Flame shape
+      ctx.beginPath();ctx.moveTo(px2,cy-sz);ctx.quadraticCurveTo(px2+sz,cy-sz*0.3,px2+sz*0.5,cy+sz);ctx.lineTo(px2,cy+sz*0.4);ctx.lineTo(px2-sz*0.5,cy+sz);ctx.quadraticCurveTo(px2-sz,cy-sz*0.3,px2,cy-sz);ctx.fill();
+    } else if(pu.type==='BOMB'){
+      // Circle with fuse
+      ctx.beginPath();ctx.arc(px2,cy+2,sz*0.8,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle=info.color;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(px2,cy+2-sz*0.8);ctx.lineTo(px2+sz*0.3,cy-sz*1.1);ctx.stroke();
+    } else if(pu.type==='SPEED'){
+      // Lightning bolt
+      ctx.beginPath();ctx.moveTo(px2+2,cy-sz);ctx.lineTo(px2-sz*0.4,cy+1);ctx.lineTo(px2+1,cy+1);ctx.lineTo(px2-2,cy+sz);ctx.lineTo(px2+sz*0.4,cy-1);ctx.lineTo(px2-1,cy-1);ctx.closePath();ctx.fill();
+    } else if(pu.type==='SHIELD'){
+      // Shield shape
+      ctx.beginPath();ctx.moveTo(px2,cy-sz);ctx.lineTo(px2+sz,cy-sz*0.4);ctx.lineTo(px2+sz,cy+sz*0.2);ctx.quadraticCurveTo(px2,cy+sz*1.2,px2,cy+sz);ctx.quadraticCurveTo(px2,cy+sz*1.2,px2-sz,cy+sz*0.2);ctx.lineTo(px2-sz,cy-sz*0.4);ctx.closePath();ctx.fill();
+    } else if(pu.type==='GHOST'){
+      // Ghost shape
+      ctx.beginPath();ctx.arc(px2,cy-sz*0.2,sz*0.7,Math.PI,0);ctx.lineTo(px2+sz*0.7,cy+sz);ctx.lineTo(px2+sz*0.3,cy+sz*0.6);ctx.lineTo(px2,cy+sz);ctx.lineTo(px2-sz*0.3,cy+sz*0.6);ctx.lineTo(px2-sz*0.7,cy+sz);ctx.closePath();ctx.fill();
+    } else if(pu.type==='LIFE'){
+      // Diamond
+      ctx.beginPath();ctx.moveTo(px2,cy-sz);ctx.lineTo(px2+sz,cy);ctx.lineTo(px2,cy+sz);ctx.lineTo(px2-sz,cy);ctx.closePath();ctx.fill();
+    }
     ctx.restore();
   });
 
@@ -2471,11 +2614,14 @@ function render(dt){
       ctx.fillRect(px+s*0.03+eo,py-s*0.66,s*0.17,s*0.17);
     }
 
-    // Crown for me
+    // Crown for me — drawn diamond
     if(p.id===mySlot){
-      ctx.fillStyle=p.color; ctx.font=`${CELL*0.38}px serif`;
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText('★',px,py-s*1.22);
+      ctx.fillStyle=p.color;
+      const cx2=px, cy2=py-s*1.22, ds=CELL*0.16;
+      ctx.beginPath();
+      ctx.moveTo(cx2,cy2-ds); ctx.lineTo(cx2+ds,cy2);
+      ctx.lineTo(cx2,cy2+ds*0.6); ctx.lineTo(cx2-ds,cy2);
+      ctx.closePath(); ctx.fill();
     }
 
     // Speed boost trail
