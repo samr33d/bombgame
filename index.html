@@ -70,6 +70,35 @@ header {
 #music-toggle { cursor: pointer; background: transparent; font-family: 'Geist Mono', monospace; transition: all 0.15s; }
 #music-toggle:hover { border-color: var(--border-light); color: var(--text); }
 #music-toggle.muted { opacity: 0.4; }
+#notes-toggle { cursor: pointer; background: transparent; font-family: 'Geist Mono', monospace; transition: all 0.15s; }
+#notes-toggle:hover { border-color: var(--border-light); color: var(--text); }
+
+#release-notes {
+  display: none; width: 100%; max-height: 80vh; overflow-y: auto;
+  position: relative; z-index: 50;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+#release-notes.visible { display: block; }
+.notes-inner {
+  max-width: 85vw; margin: 0 auto;
+  padding: 24px 0 32px;
+}
+.notes-title {
+  font-size: 0.85rem; letter-spacing: 3px; color: var(--gold);
+  margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
+}
+.note-entry {
+  margin-bottom: 16px; padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.note-entry:last-child { border-bottom: none; margin-bottom: 0; }
+.note-version {
+  font-size: 0.8rem; color: var(--cyan); letter-spacing: 2px; margin-bottom: 6px;
+}
+.note-items {
+  font-size: 0.78rem; color: var(--text-dim); line-height: 1.8;
+}
 .ping-display { font-size: 0.8rem; color: var(--text-muted); }
 .ping-display.good { color: var(--green); }
 .ping-display.ok { color: var(--gold); }
@@ -362,12 +391,100 @@ header {
       </div>
     </div>
     <div class="header-right">
+      <button class="status-badge" id="notes-toggle" onclick="toggleNotes()">📋 NOTES</button>
       <button class="status-badge" id="music-toggle" onclick="toggleMusic()" title="Toggle music">🔊 MUSIC</button>
       <div class="ping-display" id="ping-display"></div>
       <div class="status-badge" id="net-status">OFFLINE</div>
     </div>
   </div>
 </header>
+
+<div id="release-notes">
+  <div class="notes-inner">
+    <div class="notes-title">📋 RELEASE NOTES</div>
+
+    <div class="note-entry">
+      <div class="note-version">v0.9 — LATEST</div>
+      <div class="note-items">
+        Smarter AI: bots hunt all players, seek power-ups, check escape routes before bombing, and avoid hitting teammates in team mode<br>
+        Explosion duration tightened (650ms → 400ms) for fairer gameplay<br>
+        Friendly fire ON by default (toggle to disable)<br>
+        Renamed self-damage → friendly fire
+      </div>
+    </div>
+
+    <div class="note-entry">
+      <div class="note-version">v0.8 — PICK AXE & MUSIC</div>
+      <div class="note-items">
+        New power-up: ⛏️ Pick Axe — break walls by walking through them (10s)<br>
+        Ghost and Pick Axe are mutually exclusive<br>
+        Chiptune music engine (gameplay loop + victory fanfare)<br>
+        Music mute toggle in header<br>
+        Fixed double-join bug and "disconnected from host" errors
+      </div>
+    </div>
+
+    <div class="note-entry">
+      <div class="note-version">v0.7 — TEAMS & TOGGLES</div>
+      <div class="note-items">
+        Team mode (2v2) with team-colored players<br>
+        Toggleable power-ups in lobby settings<br>
+        Friendly fire and team mode switches<br>
+        Ghost power-up: phase through walls for 10s<br>
+        Power-up timers shown in HUD
+      </div>
+    </div>
+
+    <div class="note-entry">
+      <div class="note-version">v0.6 — UI OVERHAUL</div>
+      <div class="note-items">
+        Color-blocked card design (gold host, blue join, colored info cards)<br>
+        85vw responsive layout with unified 16px spacing<br>
+        Scroll-locked during gameplay on mobile<br>
+        Touch control improvements
+      </div>
+    </div>
+
+    <div class="note-entry">
+      <div class="note-version">v0.5 — GRID MOVEMENT</div>
+      <div class="note-items">
+        Switched to tile-based grid movement for precision<br>
+        Speed boost reworked as permanent stacking levels (max 4)<br>
+        Client-side prediction for smooth multiplayer<br>
+        Reduced base player speed for better control
+      </div>
+    </div>
+
+    <div class="note-entry">
+      <div class="note-version">v0.4 — GAME MODES</div>
+      <div class="note-items">
+        Three modes: Classic (3 lives), Survival (1 life), Blitz (90s timer)<br>
+        AI bots with easy/medium/hard difficulty<br>
+        Kill feed and scoreboard<br>
+        LotR-themed player and bot names
+      </div>
+    </div>
+
+    <div class="note-entry">
+      <div class="note-version">v0.3 — POWER-UPS</div>
+      <div class="note-items">
+        Six power-ups: blast, bomb, speed, shield, freeze, extra life<br>
+        Power-ups drop from destroyed walls and spawn randomly<br>
+        Minimap with player dots and viewport indicator
+      </div>
+    </div>
+
+    <div class="note-entry">
+      <div class="note-version">v0.1 — INITIAL RELEASE</div>
+      <div class="note-items">
+        PeerJS multiplayer (up to 8 players)<br>
+        Destructible walls, bombs, chain explosions<br>
+        Mobile touch controls with d-pad<br>
+        Room codes with click-to-copy
+      </div>
+    </div>
+  </div>
+</div>
 
 <div id="toast" class="copied-toast">COPIED!</div>
 
@@ -1354,57 +1471,51 @@ function tickAllBots(dt) {
     const ai = aiStates[p.id];
     if (!ai) return;
     const cfg = AI_DIFFICULTY[p.aiDifficulty] || AI_DIFFICULTY.medium;
-
-    // Reaction timer
-    ai.reactionTimer -= dt;
-    if (ai.reactionTimer > 0) return;
-    ai.reactionTimer = cfg.reactionMs + Math.random() * cfg.reactionMs * 0.3;
-
     const {r: pr, c: pc} = getCell(p.x, p.y);
 
-    // ── DANGER CHECK (always highest priority) ──
+    // ── DANGER CHECK runs EVERY tick (no reaction delay) ──
     const inDanger = isCellDangerous(pr, pc) || isThreatened(p, cfg.fleeRange);
-    if (inDanger) {
-      ai.state = 'flee';
-    }
-
-    // ── STATE MACHINE ──
-    if (ai.state === 'flee') {
-      const safeCell = findSafeCell(pr, pc, cfg.fleeRange + 3);
+    if (inDanger && ai.state !== 'fleeing') {
+      const safeCell = findSafeCell(pr, pc, cfg.fleeRange + 4);
       if (safeCell) {
         ai.path = bfsPath(pr, pc, safeCell.r, safeCell.c);
         ai.state = 'fleeing';
-      } else {
-        ai.state = 'wander';
       }
     }
 
     if (ai.state === 'fleeing') {
       if (!isThreatened(p, cfg.fleeRange) && !isCellDangerous(pr, pc)) {
         ai.state = 'wander';
+        ai.path = [];
       }
+      // Don't do anything else while fleeing — just run
+      return;
     }
 
+    // ── Everything below is gated by reaction timer ──
+    ai.reactionTimer -= dt;
+    if (ai.reactionTimer > 0) return;
+    ai.reactionTimer = cfg.reactionMs + Math.random() * cfg.reactionMs * 0.3;
+
     if (ai.state === 'wander' || ai.state === 'hunt' || ai.state === 'powerup') {
-      // Priority 1: Nearby power-ups (smart bots go for them)
+      // Priority 1: Nearby power-ups
       const nearPU = findNearestPowerup(pr, pc, cfg.huntRange);
       if (nearPU && Math.random() < 0.6 + cfg.trapSkill * 0.4) {
         ai.path = bfsPath(pr, pc, nearPU.r, nearPU.c);
-        if (ai.path.length > 0) { ai.state = 'powerup'; return; }
-      }
-
-      // Priority 2: Hunt players (now targets ALL players, not just humans)
-      const target = findTarget(p, pr, pc, cfg);
-      if (target) {
-        ai.path = bfsPath(pr, pc, target.r, target.c);
-        ai.state = target.isPlayer ? 'hunt' : 'wander';
+        if (ai.path.length > 0) { ai.state = 'powerup'; }
       } else {
-        // Random wander with larger range
-        const rr = pr + (Math.random()<0.5?-1:1)*(2+Math.floor(Math.random()*5));
-        const rc = pc + (Math.random()<0.5?-1:1)*(2+Math.floor(Math.random()*5));
-        const cr = Math.max(1,Math.min(ROWS-2,rr));
-        const cc = Math.max(1,Math.min(COLS-2,rc));
-        if (grid[cr][cc]===0) ai.path = bfsPath(pr, pc, cr, cc);
+        // Priority 2: Hunt players
+        const target = findTarget(p, pr, pc, cfg);
+        if (target) {
+          ai.path = bfsPath(pr, pc, target.r, target.c);
+          ai.state = target.isPlayer ? 'hunt' : 'wander';
+        } else {
+          const rr = pr + (Math.random()<0.5?-1:1)*(2+Math.floor(Math.random()*5));
+          const rc = pc + (Math.random()<0.5?-1:1)*(2+Math.floor(Math.random()*5));
+          const cr = Math.max(1,Math.min(ROWS-2,rr));
+          const cc = Math.max(1,Math.min(COLS-2,rc));
+          if (grid[cr][cc]===0) ai.path = bfsPath(pr, pc, cr, cc);
+        }
       }
     }
 
@@ -1413,12 +1524,13 @@ function tickAllBots(dt) {
     if (ai.bombCooldown <= 0 && p.activeBombs < p.maxBombs && p.bombCooldown <= 0) {
       const shouldBomb = decideDropBomb(p, pr, pc, cfg);
       if (shouldBomb) {
-        // Check we can escape before bombing
-        const canEscape = findSafeCellAfterBomb(pr, pc, p.blastRadius);
-        if (canEscape || cfg.trapSkill < 0.3) {
+        const escapeCell = findSafeCellAfterBomb(pr, pc, p.blastRadius);
+        if (escapeCell) {
           pendingBombs.add(p.id);
           ai.bombCooldown = 300 + cfg.reactionMs * 2 + Math.random() * 500;
-          ai.state = 'flee';
+          // Immediately flee to escape cell — no waiting
+          ai.path = bfsPath(pr, pc, escapeCell.r, escapeCell.c);
+          ai.state = 'fleeing';
         }
       }
     }
@@ -1434,19 +1546,42 @@ function applyBotMovement(p, dt) {
   // Follow path
   if (ai.path && ai.path.length > 0) {
     const next = ai.path[0];
-    const tx = next.c * CELL + CELL/2;
-    const ty = next.r * CELL + CELL/2;
-    const dx = tx - p.x;
-    const dy = ty - p.y;
-    const dist = Math.sqrt(dx*dx + dy*dy);
 
-    if (dist < CELL * 0.3) {
-      ai.path.shift(); // reached this waypoint
+    // Safety check: if the next tile in our path is dangerous, abort path
+    if (isCellDangerous(next.r, next.c) && ai.state !== 'fleeing') {
+      ai.path = [];
+      ai.state = 'wander';
     } else {
-      if (Math.abs(dx) > Math.abs(dy)) {
-        inp.right = dx > 0; inp.left = dx < 0;
+      const tx = next.c * CELL + CELL/2;
+      const ty = next.r * CELL + CELL/2;
+      const dx = tx - p.x;
+      const dy = ty - p.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+
+      if (dist < CELL * 0.3) {
+        ai.path.shift();
       } else {
-        inp.down = dy > 0; inp.up = dy < 0;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          inp.right = dx > 0; inp.left = dx < 0;
+        } else {
+          inp.down = dy > 0; inp.up = dy < 0;
+        }
+      }
+    }
+  }
+
+  // If no path and currently on a dangerous cell, emergency flee
+  if ((!ai.path || ai.path.length === 0)) {
+    const {r: pr, c: pc} = getCell(p.x, p.y);
+    if (isCellDangerous(pr, pc)) {
+      // Try each direction for an immediate safe neighbor
+      for (const [dr,dc,dir] of [[-1,0,'up'],[1,0,'down'],[0,-1,'left'],[0,1,'right']]) {
+        const nr=pr+dr, nc=pc+dc;
+        if (grid[nr] && grid[nr][nc]===0 && !isCellDangerous(nr, nc)) {
+          inp = blankInput();
+          inp[dir] = true;
+          break;
+        }
       }
     }
   }
@@ -1456,7 +1591,6 @@ function applyBotMovement(p, dt) {
   if (ai.stuckTimer > 600) {
     const moved = Math.abs(p.x-ai.lastX)+Math.abs(p.y-ai.lastY);
     if (moved < 2) {
-      // Unstick: clear path, pick new direction
       ai.path = [];
       ai.state = 'wander';
       inp.right = Math.random()>0.5; inp.up = Math.random()>0.5;
@@ -1505,12 +1639,16 @@ function bombReachesCell(bomb, tr, tc) {
 }
 
 function findSafeCell(r, c, searchRange) {
-  // BFS outward to find a cell not in danger
+  // BFS outward to find a cell not in danger from ANY bomb or explosion
   const visited = new Set([`${r},${c}`]);
   const queue = [{r, c, dist:0}];
+  let bestSafe = null;
   while (queue.length > 0) {
     const cur = queue.shift();
-    if (cur.dist > 0 && !isCellDangerous(cur.r, cur.c)) return cur;
+    if (cur.dist > 0 && !isCellDangerous(cur.r, cur.c)) {
+      // Prefer cells further from all bombs
+      return cur;
+    }
     if (cur.dist >= searchRange) continue;
     for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
       const nr=cur.r+dr, nc=cur.c+dc;
@@ -1534,19 +1672,22 @@ function findNearestPowerup(pr, pc, range) {
 }
 
 function findSafeCellAfterBomb(br, bc, radius) {
-  // Simulate: if a bomb were at (br,bc), is there an adjacent safe cell?
-  for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-    const nr=br+dr, nc=bc+dc;
-    if (!grid[nr]||grid[nr][nc]!==0) continue;
-    // Check this cell wouldn't be hit by the bomb
-    if (!bombWouldReach(br,bc,radius,nr,nc)) return {r:nr,c:nc};
-  }
-  // Check 2 steps away
-  for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-    for (let dist=2; dist<=3; dist++) {
-      const nr=br+dr*dist, nc=bc+dc*dist;
-      if (!grid[nr]||grid[nr][nc]!==0) break;
-      if (!bombWouldReach(br,bc,radius,nr,nc)) return {r:nr,c:nc};
+  // BFS to find a safe cell that's NOT in the blast zone of our bomb OR any existing bomb
+  const visited = new Set([`${br},${bc}`]);
+  const queue = [{r:br,c:bc,dist:0}];
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    if (cur.dist > 0 && !bombWouldReach(br,bc,radius,cur.r,cur.c) && !isCellDangerous(cur.r,cur.c)) {
+      return cur;
+    }
+    if (cur.dist >= 6) continue;
+    for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nr=cur.r+dr, nc=cur.c+dc;
+      const key=`${nr},${nc}`;
+      if (visited.has(key)) continue;
+      if (!grid[nr]||grid[nr][nc]!==0) continue;
+      visited.add(key);
+      queue.push({r:nr,c:nc,dist:cur.dist+1});
     }
   }
   return null;
@@ -2662,6 +2803,10 @@ function copyCode(){
     document.execCommand('copy'); document.body.removeChild(ta);
     flashToast();
   }
+}
+function toggleNotes(){
+  var panel=document.getElementById('release-notes');
+  panel.classList.toggle('visible');
 }
 function toggleMusic(){
   try{
