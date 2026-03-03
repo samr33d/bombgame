@@ -1616,6 +1616,8 @@ function simTick() {
   simExplosions(dt);
   spawnPowerups();
   checkWin();
+  updateHUD();
+  updateRoundTimer();
   broadcastState();
 }
 
@@ -1865,8 +1867,8 @@ function collectPowerup(p, idx){
     case 'BOMB':   p.maxBombs=Math.min(p.maxBombs+1,5); break;
     case 'SPEED':  p.speedBoost=Math.min((p.speedBoost||0)+1, 4); break;
     case 'SHIELD': p.shield=true; break;
-    case 'GHOST':  p.ghostTimer=10000; break;
-    case 'SHOVEL': p.shovelTimer=10000; break;
+    case 'GHOST':  p.ghostTimer=10000; p.shovelTimer=0; break;
+    case 'SHOVEL': p.shovelTimer=10000; p.ghostTimer=0; break;
     case 'LIFE':   p.lives=Math.min(p.lives+1,5); break;
   }
   updateHUD();
