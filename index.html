@@ -413,6 +413,7 @@ header {
           <button class="mode-btn active" onclick="togglePowerup('BOMB')" id="pu-BOMB">💣 BOMB</button>
           <button class="mode-btn active" onclick="togglePowerup('SPEED')" id="pu-SPEED">👟 SPEED</button>
           <button class="mode-btn active" onclick="togglePowerup('SHIELD')" id="pu-SHIELD">🛡️ SHIELD</button>
+          <button class="mode-btn active" onclick="togglePowerup('GHOST')" id="pu-GHOST">👻 GHOST</button>
           <button class="mode-btn active" onclick="togglePowerup('LIFE')" id="pu-LIFE">💎 LIFE</button>
         </div>
       </div>
@@ -461,7 +462,7 @@ header {
     <div class="info-card">
       <div class="info-card-title">POWER-UPS</div>
       <div class="info-card-body">
-        🔥 Bigger blast<br>💣 More bombs<br>👟 Speed up (permanent)<br>🛡️ Shield (1 hit)<br>💎 Extra life (rare)
+        🔥 Bigger blast<br>💣 More bombs<br>👟 Speed up (permanent)<br>🛡️ Shield (1 hit)<br>👻 Ghost (10s, pass walls)<br>💎 Extra life (rare)
       </div>
     </div>
     <div class="info-card">
@@ -525,7 +526,7 @@ const ROWS = 27;
 const DEFAULT_BOMB_RADIUS = 3;
 const BOMB_TIMER_MS = 2800;
 const EXPLOSION_DURATION = 650;
-const PLAYER_SPEED = 4.5;
+const PLAYER_SPEED = 3.2;
 const MAX_PLAYERS = 8;
 const TICK_MS = 33;
 const PING_INTERVAL = 2000;
@@ -553,7 +554,7 @@ const POWER_UP_TYPES = {
   BOMB:   { icon:'💣', color:'#ffcc00', label:'+1 BOMB' },
   SPEED:  { icon:'👟', color:'#44ff88', label:'SPEED UP' },
   SHIELD: { icon:'🛡️', color:'#00e5ff', label:'SHIELD' },
-
+  GHOST:  { icon:'👻', color:'#bb88ff', label:'GHOST MODE' },
   LIFE:   { icon:'💎', color:'#ff44ff', label:'+1 LIFE' },
 };
 const POWERUP_KEYS = Object.keys(POWER_UP_TYPES);
@@ -569,7 +570,7 @@ let clientConns = {};
 let roomCode = null;
 let lobbyPlayers = [];
 let selectedMode = 'classic';
-let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, LIFE:true };
+let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, LIFE:true };
 
 let grid = [];
 let powerups = [];
@@ -828,7 +829,7 @@ function broadcastState() {
       id:p.id, x:p.x, y:p.y, alive:p.alive, lives:p.lives,
       gridR:p.gridR, gridC:p.gridC, targetR:p.targetR, targetC:p.targetC,
       dir:p.dir, walkFrame:p.walkFrame, invincible:p.invincible>0,
-      frozen:p.frozen>0, shield:p.shield, speedBoost:p.speedBoost||0,
+      frozen:p.frozen>0, shield:p.shield, speedBoost:p.speedBoost||0, ghostTimer:p.ghostTimer||0,
       blastRadius:p.blastRadius, maxBombs:p.maxBombs, kills:p.kills,
       isBot:p.isBot||false,
     })),
@@ -930,7 +931,7 @@ function handleClientReceive(data) {
       if (sp.id === mySlot) {
         lp.alive=sp.alive; lp.lives=sp.lives; lp.invincible=sp.invincible?800:0;
         lp.shield=sp.shield; lp.frozen=sp.frozen?500:0;
-        lp.speedBoost=sp.speedBoost||0;
+        lp.speedBoost=sp.speedBoost||0; lp.ghostTimer=sp.ghostTimer||0;
         lp.blastRadius=sp.blastRadius; lp.maxBombs=sp.maxBombs;
         lp.kills=sp.kills||0;
       } else {
@@ -939,6 +940,7 @@ function handleClientReceive(data) {
         lp.alive=sp.alive; lp.lives=sp.lives; lp.dir=sp.dir;
         lp.walkFrame=sp.walkFrame; lp.invincible=sp.invincible?800:0;
         lp.frozen=sp.frozen?500:0; lp.shield=sp.shield;
+        lp.ghostTimer=sp.ghostTimer||0;
         lp.kills=sp.kills||0;
       }
     });
@@ -1148,7 +1150,7 @@ function initGameState() {
       gridR: sp.r, gridC: sp.c, targetR: sp.r, targetC: sp.c,
       alive: true, lives: startLives,
       bombCooldown: 0, maxBombs: 2, activeBombs: 0,
-      invincible: 0, frozen: 0, shield: false, speedBoost: 0,
+      invincible: 0, frozen: 0, shield: false, speedBoost: 0, ghostTimer: 0,
       blastRadius: DEFAULT_BOMB_RADIUS,
       dir:'down', walkFrame:0, walkTimer:0, kills: 0,
     };
@@ -1640,7 +1642,7 @@ function simPlayer(p, dt) {
   if (p.frozen > 0) { p.frozen-=dt; }
   else {
     // Grid-based tile movement with carry-over for smoothness
-    const spdMult = 1 + (p.speedBoost||0) * 0.15;
+    const spdMult = 1 + (p.speedBoost||0) * 0.08;
     let budget = PLAYER_SPEED * spdMult * (dt/16);
 
     // Allow multiple tile transitions per frame if speed is high enough
@@ -1683,7 +1685,7 @@ function simPlayer(p, dt) {
           else if(dr<0) p.dir='up'; else if(dr>0) p.dir='down';
           const nr = p.gridR + dr;
           const nc = p.gridC + dc;
-          if(canMoveToTile(nr, nc)) {
+          if(canMoveToTile(nr, nc, p.ghostTimer>0)) {
             p.targetR = nr;
             p.targetC = nc;
             // Continue moving with leftover budget (loop again)
@@ -1706,6 +1708,22 @@ function simPlayer(p, dt) {
   }
   if(p.bombCooldown>0) p.bombCooldown-=dt;
   if(p.invincible>0) p.invincible-=dt;
+  if(p.ghostTimer>0) {
+    p.ghostTimer-=dt;
+    // If ghost expired while inside a wall, push to nearest open tile
+    if(p.ghostTimer<=0) {
+      p.ghostTimer=0;
+      const cr=p.gridR, cc=p.gridC;
+      if(grid[cr]&&(grid[cr][cc]===1||grid[cr][cc]===2)){
+        const safe=findNearestOpenTile(cr,cc);
+        if(safe){
+          p.gridR=safe.r; p.gridC=safe.c;
+          p.targetR=safe.r; p.targetC=safe.c;
+          p.x=safe.c*CELL+CELL/2; p.y=safe.r*CELL+CELL/2;
+        }
+      }
+    }
+  }
 
   // Check power-up collection
   const {r,c}=getCell(p.x,p.y);
@@ -1722,10 +1740,30 @@ function simPlayer(p, dt) {
   }
 }
 
-function canMoveToTile(r, c) {
+function canMoveToTile(r, c, ghosted) {
   if(!grid[r]) return false;
+  if(r===0||r===ROWS-1||c===0||c===COLS-1) return false; // outer boundary always blocks
+  if(ghosted) return true; // ghost can pass through everything else
   if(grid[r][c]===1 || grid[r][c]===2) return false;
   return true;
+}
+
+function findNearestOpenTile(sr,sc){
+  const visited=new Set([`${sr},${sc}`]);
+  const queue=[{r:sr,c:sc}];
+  while(queue.length>0){
+    const cur=queue.shift();
+    for(const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]){
+      const nr=cur.r+dr, nc=cur.c+dc;
+      const key=`${nr},${nc}`;
+      if(visited.has(key)) continue;
+      if(!grid[nr]) continue;
+      visited.add(key);
+      if(grid[nr][nc]===0) return {r:nr,c:nc};
+      queue.push({r:nr,c:nc});
+    }
+  }
+  return null;
 }
 
 function getCell(x,y){ return {r:Math.floor(y/CELL),c:Math.floor(x/CELL)}; }
@@ -1733,9 +1771,11 @@ function getCell(x,y){ return {r:Math.floor(y/CELL),c:Math.floor(x/CELL)}; }
 
 
 function dropBomb(p){
-  // Player is grid-aligned, use current grid cell
   const r = p.gridR, c = p.gridC;
-  if(!grid[r]||grid[r][c]!==0) return;
+  if(!grid[r]) return;
+  // Can only place bombs on open tiles (not inside walls, even if ghosted)
+  if(grid[r][c]!==0 && p.ghostTimer<=0) return;
+  if(grid[r][c]===1 || grid[r][c]===2) return; // never place bombs inside walls
   if(bombs.some(b=>b.r===r&&b.c===c)) return;
   p.activeBombs++;
   p.bombCooldown=300;
@@ -1776,7 +1816,7 @@ function explodeBomb(bomb){
 function simExplosions(dt){ explosions.forEach(e=>e.timer-=dt); explosions=explosions.filter(e=>e.timer>0); }
 
 let puIdCounter=0;
-const POWERUP_WEIGHTS = { BLAST:10, BOMB:10, SPEED:10, SHIELD:8, LIFE:2 };
+const POWERUP_WEIGHTS = { BLAST:10, BOMB:10, SPEED:10, SHIELD:8, GHOST:4, LIFE:2 };
 
 function spawnPowerupAt(r,c){
   if(powerups.some(p=>p.r===r&&p.c===c)) return;
@@ -1820,6 +1860,7 @@ function collectPowerup(p, idx){
     case 'BOMB':   p.maxBombs=Math.min(p.maxBombs+1,5); break;
     case 'SPEED':  p.speedBoost=Math.min((p.speedBoost||0)+1, 5); break;
     case 'SHIELD': p.shield=true; break;
+    case 'GHOST':  p.ghostTimer=10000; break;
     case 'LIFE':   p.lives=Math.min(p.lives+1,5); break;
   }
   updateHUD();
@@ -1920,6 +1961,7 @@ function updateHUD(){
       <span class="hud-name">${p.isBot?'🤖':''}${escHtml(p.name)}${p.id===mySlot?'★':''}</span>
       ${p.shield?'<span class="hud-powerup">🛡️</span>':''}
       ${p.speedBoost>0?`<span class="hud-powerup">👟×${p.speedBoost}</span>`:''}
+      ${p.ghostTimer>0?`<span class="hud-powerup">👻${Math.ceil(p.ghostTimer/1000)}s</span>`:''}
       <span class="hud-lives">${'♥'.repeat(Math.max(0,p.lives))}</span>
       ${gameMode==='blitz'?`<span style="color:var(--text-dim);font-size:0.72rem;margin-left:2px">×${p.kills||0}</span>`:''}
     </div>`).join('');
@@ -2065,7 +2107,7 @@ function quitGame(){
   if(peer){peer.destroy();peer=null;}
   isHost=false; mySlot=-1; lobbyPlayers=[];
   botCount=0; aiStates={};
-  powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, LIFE:true };
+  powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, LIFE:true };
   POWERUP_KEYS.forEach(k => { const el=document.getElementById('pu-'+k); if(el) el.classList.add('active'); });
   document.getElementById('bot-count-display').textContent='0';
   document.getElementById('host-info').style.display='none';
@@ -2118,7 +2160,7 @@ function hostVisualInterp(p, dt) {
   const dy = ty - p.y;
   const dist = Math.sqrt(dx*dx+dy*dy);
   if (dist > 0.5) {
-    const spdMult = 1 + (p.speedBoost||0) * 0.15;
+    const spdMult = 1 + (p.speedBoost||0) * 0.08;
     const spd = PLAYER_SPEED * spdMult * (dt/16);
     const step = Math.min(spd, dist);
     p.x += (dx/dist) * step;
@@ -2131,7 +2173,7 @@ function hostVisualInterp(p, dt) {
 function clientPredictMe(p,dt){
   if(p.frozen>0) return;
   const inp=buildMyInput();
-  const spdMult = 1 + (p.speedBoost||0) * 0.15;
+  const spdMult = 1 + (p.speedBoost||0) * 0.08;
   let budget = PLAYER_SPEED*spdMult*(dt/16);
 
   let steps = 0;
@@ -2169,7 +2211,7 @@ function clientPredictMe(p,dt){
         else if(dr<0) p.dir='up'; else if(dr>0) p.dir='down';
         const nr = p.gridR + dr;
         const nc = p.gridC + dc;
-        if(canMoveToTilePredicted(nr, nc)) {
+        if(canMoveToTilePredicted(nr, nc, p.ghostTimer>0)) {
           p.targetR = nr;
           p.targetC = nc;
           continue;
@@ -2183,8 +2225,10 @@ function clientPredictMe(p,dt){
   }
 }
 
-function canMoveToTilePredicted(r, c) {
+function canMoveToTilePredicted(r, c, ghosted) {
   if(!grid[r]) return false;
+  if(r===0||r===ROWS-1||c===0||c===COLS-1) return false;
+  if(ghosted) return true;
   if(grid[r][c]===1 || grid[r][c]===2) return false;
   return true;
 }
@@ -2376,6 +2420,12 @@ function render(dt){
     // Freeze tint
     if(p.frozen>0){ ctx.fillStyle='rgba(100,200,255,0.3)'; ctx.fillRect(px-s*0.8,py-s*1.2,s*1.6,s*2); }
 
+    // Ghost effect — semi-transparent with purple glow
+    if(p.ghostTimer>0){
+      ctx.globalAlpha = 0.45 + Math.sin(performance.now()*0.005)*0.15;
+      ctx.shadowColor='#bb88ff'; ctx.shadowBlur=16;
+    }
+
     // Shadow
     ctx.fillStyle='rgba(0,0,0,0.4)';
     ctx.beginPath(); ctx.ellipse(px,py+s*0.85,s*0.7,s*0.2,0,0,Math.PI*2); ctx.fill();
@@ -2445,58 +2495,6 @@ function render(dt){
   });
 
   // ── Minimap ──
-  renderMinimap(vw, vh);
-}
-
-function renderMinimap(vw,vh){
-  const mw=110, mh=Math.round(110*ROWS/COLS);
-  const mx=Math.round(viewport.x)+vw-mw-6;
-  const my=Math.round(viewport.y)+6;
-  const cs=mw/COLS;
-
-  ctx.save();
-  ctx.globalAlpha=0.85;
-  ctx.fillStyle='rgba(0,0,0,0.8)';
-  ctx.fillRect(mx-1,my-1,mw+2,mh+2);
-
-  for(let r=0;r<ROWS;r++){
-    for(let c=0;c<COLS;c++){
-      const v=grid[r]&&grid[r][c];
-      if(v===1) ctx.fillStyle='#202038';
-      else if(v===2) ctx.fillStyle='#3d2410';
-      else ctx.fillStyle='#0b0b16';
-      ctx.fillRect(mx+c*cs,my+r*cs,Math.ceil(cs),Math.ceil(cs));
-    }
-  }
-
-  // Power-ups on minimap
-  powerups.forEach(pu=>{
-    const info=POWER_UP_TYPES[pu.type];
-    ctx.fillStyle=info.color;
-    ctx.globalAlpha=0.7;
-    ctx.fillRect(mx+pu.c*cs-1,my+pu.r*cs-1,3,3);
-  });
-
-  // Players
-  players.forEach(p=>{
-    if(!p.alive) return;
-    ctx.globalAlpha=1;
-    ctx.fillStyle=p.color;
-    ctx.shadowColor=p.color; ctx.shadowBlur=3;
-    ctx.beginPath();
-    ctx.arc(mx+p.x/CELL*cs,my+p.y/CELL*cs,p.id===mySlot?3:2,0,Math.PI*2);
-    ctx.fill();
-  });
-  ctx.shadowBlur=0;
-
-  // Viewport rect
-  ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=1;
-  const wrap=document.getElementById('canvas-wrap');
-  const sc = canvas._scale || 1;
-  const vw2=wrap?(wrap.clientWidth/sc):400, vh2=wrap?(wrap.clientHeight/sc):300;
-  ctx.strokeRect(mx+viewport.x/CELL*cs,my+viewport.y/CELL*cs,vw2/CELL*cs,vh2/CELL*cs);
-
-  ctx.restore();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
