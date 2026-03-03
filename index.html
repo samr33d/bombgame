@@ -2573,14 +2573,14 @@ document.addEventListener('touchend',e=>{
 // CHIPTUNE MUSIC ENGINE
 var Music=(function(){
 var actx=null,playing=null,nodes=[],timers=[],mg=null,VOL=0.08;
-function init(){if(actx)return;actx=new(window.AudioContext||window.webkitAudioContext)();mg=actx.createGain();mg.gain.value=VOL;mg.connect(actx.destination);}
+function init(){if(!actx){actx=new(window.AudioContext||window.webkitAudioContext)();mg=actx.createGain();mg.gain.value=muted?0:VOL;mg.connect(actx.destination);}if(actx.state==='suspended')actx.resume();}
 function stop(){timers.forEach(function(id){clearTimeout(id)});timers=[];nodes.forEach(function(n){try{n.stop()}catch(e){}try{n.disconnect()}catch(e){}});nodes=[];playing=null;}
 function NT(nm,oc){var s={C:0,"C#":1,D:2,"D#":3,E:4,F:5,"F#":6,G:7,"G#":8,A:9,"A#":10,B:11};return 440*Math.pow(2,(s[nm]+(oc-4)*12-9)/12);}
 function os(type,freq,start,dur,vol,det){var o=actx.createOscillator(),g=actx.createGain();o.type=type;o.frequency.value=freq;if(det)o.detune.value=det;g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(vol||0.3,start+0.01);g.gain.setValueAtTime(vol||0.3,start+dur-0.03);g.gain.linearRampToValueAtTime(0,start+dur);o.connect(g);g.connect(mg);o.start(start);o.stop(start+dur+0.05);nodes.push(o,g);}
 function nz(start,dur,vol){var len=Math.max(1,actx.sampleRate*dur|0);var buf=actx.createBuffer(1,len,actx.sampleRate);var d=buf.getChannelData(0);for(var i=0;i<d.length;i++)d[i]=Math.random()*2-1;var src=actx.createBufferSource();src.buffer=buf;var g=actx.createGain();var f=actx.createBiquadFilter();f.type="highpass";f.frequency.value=6000;g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(vol||0.05,start+0.005);g.gain.setValueAtTime(vol||0.05,start+dur*0.7);g.gain.linearRampToValueAtTime(0,start+dur);src.connect(f);f.connect(g);g.connect(mg);src.start(start);src.stop(start+dur+0.05);nodes.push(src,g,f);}
 
 function playGame(){
-  init();stop();playing="game";
+  init();if(actx.state==='suspended')actx.resume();stop();playing="game";
   var BPM=150,beat=60/BPM,bar=beat*4,loopLen=bar*8;
   function sched(){
     if(playing!=="game")return;
@@ -2598,7 +2598,7 @@ function playGame(){
 }
 
 function playVictory(){
-  init();stop();playing="victory";
+  init();if(actx.state==='suspended')actx.resume();stop();playing="victory";
   var now=actx.currentTime+0.05,BPM=140,beat=60/BPM;
   var fan=[["C",5,.5],["E",5,.5],["G",5,.5],["C",6,1],["B",5,.25],["C",6,.25],["B",5,.25],["C",6,.75],["G",5,.5],["E",5,.5],["G",5,.5],["C",6,1.5]];
   var t=0;fan.forEach(function(m){var st=now+t*beat;os("square",NT(m[0],m[1]),st,m[2]*beat-0.02,0.15,4);os("triangle",NT(m[0],m[1]-1),st,m[2]*beat-0.02,0.08);t+=m[2];});
@@ -2612,8 +2612,8 @@ function toggleMute(){muted=!muted;if(mg)mg.gain.value=muted?0:VOL;return muted;
 function isMuted(){return muted;}
 return{playGame:playGame,playVictory:playVictory,stop:stop,init:init,toggleMute:toggleMute,isMuted:isMuted};
 })();
-document.addEventListener("click",function(){Music.init();},{once:true});
-document.addEventListener("touchstart",function(){Music.init();},{once:true});
+document.addEventListener("click",function(){Music.init();});
+document.addEventListener("touchstart",function(){Music.init();});
 </script>
 </body>
 </html>
