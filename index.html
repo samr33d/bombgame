@@ -77,12 +77,12 @@ header {
 
 /* ── LOBBY ── */
 .lobby-title {
-  text-align: center; margin-bottom: 32px;
+  text-align: center; margin-bottom: 16px;
   font-size: clamp(0.72rem, 1.2vw, 0.85rem);
   color: var(--text-muted); letter-spacing: 3px;
 }
 .lobby-wrap {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
   max-width: 860px; width: 100%;
 }
 .card {
@@ -180,7 +180,7 @@ header {
 
 /* ── INFO GRID ── */
 .info-grid {
-  max-width: 860px; width: 100%; margin-top: 32px;
+  max-width: 860px; width: 100%; margin-top: 16px;
   display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
 }
 .info-card {
@@ -1128,6 +1128,12 @@ function launchGame() {
   document.getElementById('lobby-screen').classList.remove('active');
   const gs = document.getElementById('game-screen');
   gs.style.display = 'flex';
+
+  // Lock body scroll during gameplay
+  document.body.style.overflow = 'hidden';
+  document.body.style.position = 'fixed';
+  document.body.style.width = '100%';
+  document.body.style.height = '100%';
 
   canvas = document.getElementById('game-canvas');
   ctx = canvas.getContext('2d');
@@ -2100,6 +2106,11 @@ function quitGame(){
   window.removeEventListener('blur',clearAllKeys);
   window.removeEventListener('resize',resizeViewport);
   clearAllKeys();
+  // Unlock body scroll
+  document.body.style.overflow = '';
+  document.body.style.position = '';
+  document.body.style.width = '';
+  document.body.style.height = '';
   const gs=document.getElementById('game-screen');
   if(gs) gs.style.display='none';
   const tc=document.getElementById('touch-controls');
@@ -2527,6 +2538,11 @@ function clearErr(id){ const el=document.getElementById(id); if(el) el.textConte
 
 window.addEventListener('keydown',e=>{
   if(e.key===' '&&e.target===document.body) e.preventDefault();
+},{passive:false});
+
+// Prevent page scroll during gameplay on touch devices
+document.addEventListener('touchmove',e=>{
+  if(gameRunning && !gameOver) e.preventDefault();
 },{passive:false});
 
 // Prevent double-tap zoom on touch devices
