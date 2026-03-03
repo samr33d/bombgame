@@ -370,7 +370,7 @@ header {
     <div class="card">
       <div class="card-title">⚡ HOST A GAME</div>
       <div class="field-label">YOUR NAME</div>
-      <input class="text-input" id="host-name" maxlength="8" placeholder="BOMBER1" />
+      <input class="text-input" id="host-name" maxlength="8" placeholder="ARAGORN" />
 
       <div class="card-section">
         <div class="field-label">GAME MODE</div>
@@ -407,7 +407,6 @@ header {
         <div class="field-label">POWER-UPS</div>
         <div class="mode-select" id="powerup-toggles">
           <button class="mode-btn active" onclick="togglePowerup('BLAST')" id="pu-BLAST">🔥 BLAST</button>
-          <button class="mode-btn active" onclick="togglePowerup('BOMB')" id="pu-BOMB">💣 BOMB</button>
           <button class="mode-btn active" onclick="togglePowerup('SPEED')" id="pu-SPEED">👟 SPEED</button>
           <button class="mode-btn active" onclick="togglePowerup('SHIELD')" id="pu-SHIELD">🛡️ SHIELD</button>
           <button class="mode-btn active" onclick="togglePowerup('LIFE')" id="pu-LIFE">💎 LIFE</button>
@@ -435,7 +434,7 @@ header {
     <div class="card">
       <div class="card-title">🔗 JOIN A GAME</div>
       <div class="field-label">YOUR NAME</div>
-      <input class="text-input" id="join-name" maxlength="8" placeholder="BOMBER2" />
+      <input class="text-input" id="join-name" maxlength="8" placeholder="LEGOLAS" />
       <div class="card-section">
         <div class="field-label">ROOM CODE</div>
         <input class="text-input" id="join-code" maxlength="6" placeholder="ABC123" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()" />
@@ -458,7 +457,7 @@ header {
     <div class="info-card">
       <div class="info-card-title">POWER-UPS</div>
       <div class="info-card-body">
-        🔥 Bigger blast<br>💣 More bombs<br>👟 Speed boost<br>🛡️ Shield (1 hit)<br>💎 Extra life
+        🔥 Bigger blast<br>💣 More bombs<br>👟 Speed up (permanent)<br>🛡️ Shield (1 hit)<br>💎 Extra life (rare)
       </div>
     </div>
     <div class="info-card">
@@ -536,7 +535,10 @@ const AI_DIFFICULTY = {
   medium: { reactionMs:400,  bombChance:0.018, fleeRange:5, label:'MEDIUM', icon:'🟡' },
   hard:   { reactionMs:150,  bombChance:0.035, fleeRange:7, label:'HARD',   icon:'🔴' },
 };
-const BOT_NAMES = ['R0B0T','CYBER','GLITCH','N3X0S','V01D','SK1LL','PH4NT','Z3R0','AX10N','B1TSY'];
+const PLAYER_NAMES = ['ARAGORN','LEGOLAS','GIMLI','GANDALF','FRODO','SAM','MERRY','PIPPIN','BOROMIR','FARAMIR','EOWYN','THEODEN','ELROND','ARWEN','TREEBD'];
+function randomName(){ return PLAYER_NAMES[Math.floor(Math.random()*PLAYER_NAMES.length)]; }
+
+const BOT_NAMES = ['SAURON','GOLLUM','SARUMAN','WORMTNG','LURTZ','GOTHMOG','AZOG','BOLG','SHELOB','UNGOLNT'];
 let selectedAIDifficulty = 'medium';
 
 const COLORS = ['#ff3c5a','#00e5ff','#aaff44','#ffaa00','#cc44ff','#ff88cc','#44ffcc','#ffff44'];
@@ -545,7 +547,7 @@ const DARKS  = ['#7a0020','#007a80','#447700','#7a4400','#660099','#882255','#00
 const POWER_UP_TYPES = {
   BLAST:  { icon:'🔥', color:'#ff6b35', label:'BIGGER BLAST' },
   BOMB:   { icon:'💣', color:'#ffcc00', label:'+1 BOMB' },
-  SPEED:  { icon:'👟', color:'#44ff88', label:'SPEED BOOST' },
+  SPEED:  { icon:'👟', color:'#44ff88', label:'SPEED UP' },
   SHIELD: { icon:'🛡️', color:'#00e5ff', label:'SHIELD' },
 
   LIFE:   { icon:'💎', color:'#ff44ff', label:'+1 LIFE' },
@@ -563,7 +565,6 @@ let clientConns = {};
 let roomCode = null;
 let lobbyPlayers = [];
 let selectedMode = 'classic';
-let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, LIFE:true };
 let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, LIFE:true };
 
 let grid = [];
@@ -637,7 +638,7 @@ function togglePowerup(key) {
 }
 
 function getEnabledPowerupKeys() {
-  return POWERUP_KEYS.filter(k => powerupToggles[k]);
+  return POWERUP_KEYS.filter(k => k === 'BOMB' || powerupToggles[k]);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -678,7 +679,7 @@ function updatePingDisplay(ms) {
 // HOST FLOW
 // ═══════════════════════════════════════════════════════════════════════════════
 function hostGame() {
-  const name = (document.getElementById('host-name').value.trim() || 'BOMBER1').toUpperCase().substring(0,8);
+  const name = (document.getElementById('host-name').value.trim() || randomName()).toUpperCase().substring(0,8);
   clearErr('host-err');
   isHost = true;
 
@@ -748,7 +749,7 @@ function handleHostReceive(peerId, data) {
     const slot = lobbyPlayers.length;
     lobbyPlayers.push({
       peerId, id: slot,
-      name: (data.name||'BOMBER').toUpperCase().substring(0,8),
+      name: (data.name||randomName()).toUpperCase().substring(0,8),
       color: COLORS[slot], dark: DARKS[slot]
     });
     inputStates[slot] = blankInput();
@@ -841,7 +842,7 @@ function broadcastState() {
 // CLIENT FLOW
 // ═══════════════════════════════════════════════════════════════════════════════
 function joinGame() {
-  const name = (document.getElementById('join-name').value.trim() || 'BOMBER2').toUpperCase().substring(0,8);
+  const name = (document.getElementById('join-name').value.trim() || randomName()).toUpperCase().substring(0,8);
   const code = document.getElementById('join-code').value.trim().toUpperCase();
   if (!code || code.length < 4) { showErr('join-err','Enter a valid room code'); return; }
   clearErr('join-err');
@@ -879,7 +880,7 @@ function handleClientReceive(data) {
     return;
   }
   if (data.type === 'NEED_INFO') {
-    const name = (document.getElementById('join-name').value.trim() || 'BOMBER').toUpperCase().substring(0,8);
+    const name = (document.getElementById('join-name').value.trim() || randomName()).toUpperCase().substring(0,8);
     hostConn.send({ type:'JOIN_INFO', name });
     return;
   }
@@ -1535,8 +1536,8 @@ function simPlayer(p, dt) {
   if (p.frozen > 0) { p.frozen-=dt; }
   else {
     // Grid-based tile movement
-    const spd = PLAYER_SPEED * (p.speedBoost>0?1.7:1) * (dt/16);
-    if(p.speedBoost>0) p.speedBoost-=dt;
+    const spdMult = 1 + (p.speedBoost||0) * 0.15; // each pickup = +15% speed, max 5 = +75%
+    const spd = PLAYER_SPEED * spdMult * (dt/16);
 
     // Target position in pixels
     const tx = p.targetC * CELL + CELL/2;
@@ -1660,11 +1661,20 @@ function explodeBomb(bomb){
 function simExplosions(dt){ explosions.forEach(e=>e.timer-=dt); explosions=explosions.filter(e=>e.timer>0); }
 
 let puIdCounter=0;
+const POWERUP_WEIGHTS = { BLAST:10, BOMB:10, SPEED:10, SHIELD:8, LIFE:2 };
+
 function spawnPowerupAt(r,c){
   if(powerups.some(p=>p.r===r&&p.c===c)) return;
   const enabled = getEnabledPowerupKeys();
   if(enabled.length===0) return;
-  const type=enabled[Math.floor(Math.random()*enabled.length)];
+  // Weighted random selection
+  const totalWeight = enabled.reduce((sum,k) => sum + (POWERUP_WEIGHTS[k]||10), 0);
+  let roll = Math.random() * totalWeight;
+  let type = enabled[0];
+  for (const k of enabled) {
+    roll -= (POWERUP_WEIGHTS[k]||10);
+    if (roll <= 0) { type = k; break; }
+  }
   powerups.push({r,c,type,id:puIdCounter++,bob:Math.random()*Math.PI*2});
 }
 
@@ -1693,7 +1703,7 @@ function collectPowerup(p, idx){
   switch(pu.type){
     case 'BLAST':  p.blastRadius=Math.min(p.blastRadius+1,8); break;
     case 'BOMB':   p.maxBombs=Math.min(p.maxBombs+1,5); break;
-    case 'SPEED':  p.speedBoost=5000; break;
+    case 'SPEED':  p.speedBoost=Math.min((p.speedBoost||0)+1, 5); break;
     case 'SHIELD': p.shield=true; break;
     case 'LIFE':   p.lives=Math.min(p.lives+1,5); break;
   }
@@ -1794,7 +1804,7 @@ function updateHUD(){
       <div class="hud-pip" style="background:${p.color}"></div>
       <span class="hud-name">${p.isBot?'🤖':''}${escHtml(p.name)}${p.id===mySlot?'★':''}</span>
       ${p.shield?'<span class="hud-powerup">🛡️</span>':''}
-      ${p.speedBoost>0?'<span class="hud-powerup">👟</span>':''}
+      ${p.speedBoost>0?`<span class="hud-powerup">👟×${p.speedBoost}</span>`:''}
       <span class="hud-lives">${'♥'.repeat(Math.max(0,p.lives))}</span>
       ${gameMode==='blitz'?`<span style="color:var(--text-dim);font-size:0.72rem;margin-left:2px">×${p.kills||0}</span>`:''}
     </div>`).join('');
@@ -1978,7 +1988,8 @@ function renderLoop(ts){
 function clientPredictMe(p,dt){
   if(p.frozen>0) return;
   const inp=buildMyInput();
-  const spd=PLAYER_SPEED*(p.speedBoost>0?1.7:1)*(dt/16);
+  const spdMult = 1 + (p.speedBoost||0) * 0.15;
+  const spd=PLAYER_SPEED*spdMult*(dt/16);
 
   // Target position in pixels
   const tx = p.targetC * CELL + CELL/2;
