@@ -60,18 +60,27 @@ header {
 .logo .bomb-icon { font-size: 1.3em; }
 .logo .sub { color: var(--text-muted); font-size: 0.6em; letter-spacing: 3px; display: block; margin-top: 2px; }
 
-.header-right { display: flex; align-items: center; gap: 14px; }
+.header-right { display: flex; align-items: center; gap: 10px; }
 .status-badge {
   font-size: 0.75rem; letter-spacing: 2px;
-  padding: 5px 12px; border: 1px solid var(--border); color: var(--text-muted);
+  padding: 6px 12px; border: 1px solid var(--border); color: var(--text-muted);
   border-radius: var(--radius); transition: all 0.3s;
+  height: 30px; display: inline-flex; align-items: center; white-space: nowrap;
 }
 .status-badge.connected { border-color: var(--green); color: var(--green); }
-#music-toggle { cursor: pointer; background: transparent; font-family: 'Geist Mono', monospace; transition: all 0.15s; }
-#music-toggle:hover { border-color: var(--border-light); color: var(--text); }
+#music-toggle, #notes-toggle { cursor: pointer; background: transparent; font-family: 'Geist Mono', monospace; transition: all 0.15s; }
+#music-toggle:hover, #notes-toggle:hover { border-color: var(--border-light); color: var(--text); }
 #music-toggle.muted { opacity: 0.4; }
-#notes-toggle { cursor: pointer; background: transparent; font-family: 'Geist Mono', monospace; transition: all 0.15s; }
-#notes-toggle:hover { border-color: var(--border-light); color: var(--text); }
+.ping-display {
+  font-size: 0.75rem; color: var(--text-muted); letter-spacing: 2px;
+  padding: 6px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius); height: 30px;
+  display: inline-flex; align-items: center; white-space: nowrap;
+  min-width: 52px; justify-content: center;
+}
+.ping-display.good { color: var(--green); border-color: var(--green); }
+.ping-display.ok { color: var(--gold); border-color: var(--gold); }
+.ping-display.bad { color: var(--accent); border-color: var(--accent); }
 
 #release-notes {
   display: none; width: 100%; max-height: 80vh; overflow-y: auto;
@@ -99,10 +108,6 @@ header {
 .note-items {
   font-size: 0.78rem; color: var(--text-dim); line-height: 1.8;
 }
-.ping-display { font-size: 0.8rem; color: var(--text-muted); }
-.ping-display.good { color: var(--green); }
-.ping-display.ok { color: var(--gold); }
-.ping-display.bad { color: var(--accent); }
 
 /* ── SCREENS ── */
 .screen {
@@ -383,7 +388,7 @@ header {
 
 <header>
   <div class="header-inner">
-    <div class="logo">
+    <div class="logo" onclick="goHome()" style="cursor:pointer">
       <span class="bomb-icon">💣</span>
       <div>
         BOMB GAME: RELOADED
@@ -393,7 +398,7 @@ header {
     <div class="header-right">
       <button class="status-badge" id="notes-toggle" onclick="toggleNotes()">📋 NOTES</button>
       <button class="status-badge" id="music-toggle" onclick="toggleMusic()" title="Toggle music">🔊 MUSIC</button>
-      <div class="ping-display" id="ping-display"></div>
+      <div class="ping-display" id="ping-display" style="display:none"></div>
       <div class="status-badge" id="net-status">OFFLINE</div>
     </div>
   </div>
@@ -842,6 +847,7 @@ function updatePingDisplay(ms) {
   currentPing = ms;
   const el = document.getElementById('ping-display');
   if (!el) return;
+  el.style.display = '';
   el.textContent = ms + 'ms';
   el.className = 'ping-display ' + (ms < 80 ? 'good' : ms < 200 ? 'ok' : 'bad');
 }
@@ -2407,7 +2413,7 @@ function quitGame(){
   document.getElementById('join-info').style.display='none';
   clearErr('host-err'); clearErr('join-err');
   setStatus(false);
-  document.getElementById('ping-display').textContent='';
+  var pingEl=document.getElementById('ping-display');pingEl.textContent='';pingEl.style.display='none';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2803,6 +2809,12 @@ function copyCode(){
     document.execCommand('copy'); document.body.removeChild(ta);
     flashToast();
   }
+}
+function goHome(){
+  if(gameRunning||gameOver) quitGame();
+  var notes=document.getElementById('release-notes');
+  if(notes) notes.classList.remove('visible');
+  document.getElementById('lobby-screen').classList.add('active');
 }
 function toggleNotes(){
   var panel=document.getElementById('release-notes');
