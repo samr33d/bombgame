@@ -67,6 +67,9 @@ header {
   border-radius: var(--radius); transition: all 0.3s;
 }
 .status-badge.connected { border-color: var(--green); color: var(--green); }
+#music-toggle { cursor: pointer; background: transparent; font-family: 'Geist Mono', monospace; transition: all 0.15s; }
+#music-toggle:hover { border-color: var(--border-light); color: var(--text); }
+#music-toggle.muted { opacity: 0.4; }
 .ping-display { font-size: 0.8rem; color: var(--text-muted); }
 .ping-display.good { color: var(--green); }
 .ping-display.ok { color: var(--gold); }
@@ -359,6 +362,7 @@ header {
       </div>
     </div>
     <div class="header-right">
+      <button class="status-badge" id="music-toggle" onclick="toggleMusic()" title="Toggle music">🔊 MUSIC</button>
       <div class="ping-display" id="ping-display"></div>
       <div class="status-badge" id="net-status">OFFLINE</div>
     </div>
@@ -2537,6 +2541,13 @@ function copyCode(){
     flashToast();
   }
 }
+function toggleMusic(){
+  try{
+    var muted=Music.toggleMute();
+    var btn=document.getElementById('music-toggle');
+    if(btn){btn.textContent=muted?'🔇 MUSIC':'🔊 MUSIC';btn.classList.toggle('muted',muted);}
+  }catch(e){}
+}
 function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function flashToast(){
   const t=document.getElementById('toast');
@@ -2561,7 +2572,7 @@ document.addEventListener('touchend',e=>{
 
 // CHIPTUNE MUSIC ENGINE
 var Music=(function(){
-var actx=null,playing=null,nodes=[],timers=[],mg=null,VOL=0.18;
+var actx=null,playing=null,nodes=[],timers=[],mg=null,VOL=0.08;
 function init(){if(actx)return;actx=new(window.AudioContext||window.webkitAudioContext)();mg=actx.createGain();mg.gain.value=VOL;mg.connect(actx.destination);}
 function stop(){timers.forEach(function(id){clearTimeout(id)});timers=[];nodes.forEach(function(n){try{n.stop()}catch(e){}try{n.disconnect()}catch(e){}});nodes=[];playing=null;}
 function NT(nm,oc){var s={C:0,"C#":1,D:2,"D#":3,E:4,F:5,"F#":6,G:7,"G#":8,A:9,"A#":10,B:11};return 440*Math.pow(2,(s[nm]+(oc-4)*12-9)/12);}
@@ -2596,7 +2607,10 @@ function playVictory(){
   ["C","E","G","C","E","G","C","E"].forEach(function(n,i){os("triangle",NT(n,4+Math.floor(i/3)),now+(5+i*0.12)*beat,0.3,0.07);});
 }
 
-return{playGame:playGame,playVictory:playVictory,stop:stop,init:init};
+var muted=false;
+function toggleMute(){muted=!muted;if(mg)mg.gain.value=muted?0:VOL;return muted;}
+function isMuted(){return muted;}
+return{playGame:playGame,playVictory:playVictory,stop:stop,init:init,toggleMute:toggleMute,isMuted:isMuted};
 })();
 document.addEventListener("click",function(){Music.init();},{once:true});
 document.addEventListener("touchstart",function(){Music.init();},{once:true});
