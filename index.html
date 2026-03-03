@@ -733,6 +733,7 @@ function updatePingDisplay(ms) {
 // HOST FLOW
 // ═══════════════════════════════════════════════════════════════════════════════
 function hostGame() {
+  if (peer) return; // prevent double-click
   const name = (document.getElementById('host-name').value.trim() || randomName()).toUpperCase().substring(0,8);
   clearErr('host-err');
   isHost = true;
@@ -761,6 +762,12 @@ function blankInput() { return {up:false,down:false,left:false,right:false,bomb:
 function handleClientConnect(conn) {
   if (gameRunning || gameOver) {
     conn.send({ type:'REJECTED', reason:'Game already in progress' });
+    setTimeout(() => conn.close(), 500);
+    return;
+  }
+  // Reject duplicate connections from same peer
+  if (clientConns[conn.peer] || lobbyPlayers.some(p => p.peerId === conn.peer)) {
+    conn.send({ type:'REJECTED', reason:'Already connected' });
     setTimeout(() => conn.close(), 500);
     return;
   }
@@ -800,6 +807,9 @@ function handleHostReceive(peerId, data) {
     return;
   }
   if (data.type === 'JOIN_INFO') {
+    // Prevent duplicate joins from same peer
+    if (lobbyPlayers.some(p => p.peerId === peerId)) return;
+    if (lobbyPlayers.length >= MAX_PLAYERS) return;
     const slot = lobbyPlayers.length;
     lobbyPlayers.push({
       peerId, id: slot,
@@ -912,6 +922,7 @@ function broadcastState() {
 // CLIENT FLOW
 // ═══════════════════════════════════════════════════════════════════════════════
 function joinGame() {
+  if (peer) return; // prevent double-click
   const name = (document.getElementById('join-name').value.trim() || randomName()).toUpperCase().substring(0,8);
   const code = document.getElementById('join-code').value.trim().toUpperCase();
   if (!code || code.length < 4) { showErr('join-err','Enter a valid room code'); return; }
@@ -928,7 +939,7 @@ function joinGame() {
     });
     hostConn.on('data', data => handleClientReceive(data));
     hostConn.on('error', () => showErr('join-err', 'Could not connect to room'));
-    hostConn.on('close', () => { setStatus(false); showErr('join-err', 'Disconnected from host'); });
+    hostConn.on('close', () => { setStatus(false); if(!gameRunning && !gameOver) showErr('join-err', 'Disconnected from host'); });
   });
 }
 
