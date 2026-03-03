@@ -2572,7 +2572,7 @@ document.addEventListener('touchend',e=>{
 
 // CHIPTUNE MUSIC ENGINE
 var Music=(function(){
-var actx=null,playing=null,nodes=[],timers=[],mg=null,VOL=0.08;
+var actx=null,playing=null,nodes=[],timers=[],mg=null,VOL=0.04;
 function init(){if(!actx){actx=new(window.AudioContext||window.webkitAudioContext)();mg=actx.createGain();mg.gain.value=muted?0:VOL;mg.connect(actx.destination);}if(actx.state==='suspended')actx.resume();}
 function stop(){timers.forEach(function(id){clearTimeout(id)});timers=[];nodes.forEach(function(n){try{n.stop()}catch(e){}try{n.disconnect()}catch(e){}});nodes=[];playing=null;}
 function NT(nm,oc){var s={C:0,"C#":1,D:2,"D#":3,E:4,F:5,"F#":6,G:7,"G#":8,A:9,"A#":10,B:11};return 440*Math.pow(2,(s[nm]+(oc-4)*12-9)/12);}
