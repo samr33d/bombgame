@@ -432,7 +432,7 @@ header {
       <div class="card-section">
         <div class="field-label">RULES</div>
         <div class="mode-select">
-          <button class="mode-btn" onclick="toggleFriendlyFire()" id="btn-ff">🔥 SELF-DAMAGE: OFF</button>
+          <button class="mode-btn active" onclick="toggleFriendlyFire()" id="btn-ff">🔥 FRIENDLY FIRE: ON</button>
           <button class="mode-btn" onclick="toggleTeamMode()" id="btn-teams">⚔️ FREE FOR ALL</button>
         </div>
       </div>
@@ -555,9 +555,9 @@ const BLITZ_TIME = 90000;
 
 // AI difficulty configs
 const AI_DIFFICULTY = {
-  easy:   { reactionMs:800,  bombChance:0.006, fleeRange:3, label:'EASY',   icon:'🟢' },
-  medium: { reactionMs:400,  bombChance:0.018, fleeRange:5, label:'MEDIUM', icon:'🟡' },
-  hard:   { reactionMs:150,  bombChance:0.035, fleeRange:7, label:'HARD',   icon:'🔴' },
+  easy:   { reactionMs:600,  bombChance:0.01,  fleeRange:3, huntRange:8,  trapSkill:0,   label:'EASY',   icon:'🟢' },
+  medium: { reactionMs:250,  bombChance:0.025, fleeRange:5, huntRange:14, trapSkill:0.3, label:'MEDIUM', icon:'🟡' },
+  hard:   { reactionMs:80,   bombChance:0.05,  fleeRange:8, huntRange:25, trapSkill:0.7, label:'HARD',   icon:'🔴' },
 };
 const PLAYER_NAMES = ['ARAGORN','LEGOLAS','GIMLI','GANDALF','FRODO','SAM','MERRY','PIPPIN','BOROMIR','FARAMIR','EOWYN','THEODEN','ELROND','ARWEN','TREEBD'];
 function randomName(){ return PLAYER_NAMES[Math.floor(Math.random()*PLAYER_NAMES.length)]; }
@@ -591,7 +591,7 @@ let roomCode = null;
 let lobbyPlayers = [];
 let selectedMode = 'classic';
 let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, SHOVEL:true, LIFE:true };
-let friendlyFire = false; // self-damage from own bombs
+let friendlyFire = true; // self-damage from own bombs
 let teamMode = false; // false = FFA, true = 2 teams
 
 let grid = [];
@@ -672,7 +672,7 @@ function getEnabledPowerupKeys() {
 function toggleFriendlyFire() {
   friendlyFire = !friendlyFire;
   const btn = document.getElementById('btn-ff');
-  btn.textContent = friendlyFire ? '🔥 SELF-DAMAGE: ON' : '🔥 SELF-DAMAGE: OFF';
+  btn.textContent = friendlyFire ? '🔥 FRIENDLY FIRE: ON' : '🔥 FRIENDLY FIRE: OFF';
   btn.classList.toggle('active', friendlyFire);
   broadcastLobby();
 }
@@ -980,7 +980,7 @@ function handleClientReceive(data) {
     const mi = document.getElementById('join-mode-info');
     const parts = [(data.mode||'CLASSIC').toUpperCase()];
     if (teamMode) parts.push('TEAMS');
-    if (friendlyFire) parts.push('SELF-DAMAGE');
+    if (friendlyFire) parts.push('FRIENDLY FIRE');
     if (mi) mi.textContent = parts.join(' · ');
     return;
   }
@@ -1355,14 +1355,14 @@ function tickAllBots(dt) {
     if (!ai) return;
     const cfg = AI_DIFFICULTY[p.aiDifficulty] || AI_DIFFICULTY.medium;
 
-    // Reaction timer — hard bots react faster
+    // Reaction timer
     ai.reactionTimer -= dt;
     if (ai.reactionTimer > 0) return;
-    ai.reactionTimer = cfg.reactionMs + Math.random() * cfg.reactionMs * 0.5;
+    ai.reactionTimer = cfg.reactionMs + Math.random() * cfg.reactionMs * 0.3;
 
     const {r: pr, c: pc} = getCell(p.x, p.y);
 
-    // ── DANGER CHECK: is the bot in an explosion zone? ──
+    // ── DANGER CHECK (always highest priority) ──
     const inDanger = isCellDangerous(pr, pc) || isThreatened(p, cfg.fleeRange);
     if (inDanger) {
       ai.state = 'flee';
@@ -1370,7 +1370,7 @@ function tickAllBots(dt) {
 
     // ── STATE MACHINE ──
     if (ai.state === 'flee') {
-      const safeCell = findSafeCell(pr, pc, cfg.fleeRange + 2);
+      const safeCell = findSafeCell(pr, pc, cfg.fleeRange + 3);
       if (safeCell) {
         ai.path = bfsPath(pr, pc, safeCell.r, safeCell.c);
         ai.state = 'fleeing';
@@ -1380,21 +1380,28 @@ function tickAllBots(dt) {
     }
 
     if (ai.state === 'fleeing') {
-      if (!isThreatened(p, cfg.fleeRange) && !isCellDangerous(getCell(p.x,p.y).r, getCell(p.x,p.y).c)) {
+      if (!isThreatened(p, cfg.fleeRange) && !isCellDangerous(pr, pc)) {
         ai.state = 'wander';
       }
     }
 
-    if (ai.state === 'wander' || ai.state === 'hunt') {
-      // Find nearest target (player or destructible wall)
+    if (ai.state === 'wander' || ai.state === 'hunt' || ai.state === 'powerup') {
+      // Priority 1: Nearby power-ups (smart bots go for them)
+      const nearPU = findNearestPowerup(pr, pc, cfg.huntRange);
+      if (nearPU && Math.random() < 0.6 + cfg.trapSkill * 0.4) {
+        ai.path = bfsPath(pr, pc, nearPU.r, nearPU.c);
+        if (ai.path.length > 0) { ai.state = 'powerup'; return; }
+      }
+
+      // Priority 2: Hunt players (now targets ALL players, not just humans)
       const target = findTarget(p, pr, pc, cfg);
       if (target) {
         ai.path = bfsPath(pr, pc, target.r, target.c);
         ai.state = target.isPlayer ? 'hunt' : 'wander';
       } else {
-        // Random wander
-        const rr = pr + (Math.random()<0.5?-1:1)*(1+Math.floor(Math.random()*3));
-        const rc = pc + (Math.random()<0.5?-1:1)*(1+Math.floor(Math.random()*3));
+        // Random wander with larger range
+        const rr = pr + (Math.random()<0.5?-1:1)*(2+Math.floor(Math.random()*5));
+        const rc = pc + (Math.random()<0.5?-1:1)*(2+Math.floor(Math.random()*5));
         const cr = Math.max(1,Math.min(ROWS-2,rr));
         const cc = Math.max(1,Math.min(COLS-2,rc));
         if (grid[cr][cc]===0) ai.path = bfsPath(pr, pc, cr, cc);
@@ -1406,10 +1413,13 @@ function tickAllBots(dt) {
     if (ai.bombCooldown <= 0 && p.activeBombs < p.maxBombs && p.bombCooldown <= 0) {
       const shouldBomb = decideDropBomb(p, pr, pc, cfg);
       if (shouldBomb) {
-        pendingBombs.add(p.id);
-        ai.bombCooldown = cfg.reactionMs * 3 + Math.random() * 1000;
-        // After bombing, flee!
-        ai.state = 'flee';
+        // Check we can escape before bombing
+        const canEscape = findSafeCellAfterBomb(pr, pc, p.blastRadius);
+        if (canEscape || cfg.trapSkill < 0.3) {
+          pendingBombs.add(p.id);
+          ai.bombCooldown = 300 + cfg.reactionMs * 2 + Math.random() * 500;
+          ai.state = 'flee';
+        }
       }
     }
   });
@@ -1463,12 +1473,9 @@ function isCellDangerous(r, c) {
   for (const exp of explosions) {
     if (exp.cells.some(ec => ec.r===r && ec.c===c)) return true;
   }
-  // About to explode (bomb nearby with short fuse)
+  // Any bomb that could reach this cell
   for (const b of bombs) {
-    if (b.timer < 1800) {
-      const reaches = bombReachesCell(b, r, c);
-      if (reaches) return true;
-    }
+    if (bombReachesCell(b, r, c)) return true;
   }
   return false;
 }
@@ -1476,10 +1483,8 @@ function isCellDangerous(r, c) {
 function isThreatened(p, range) {
   const {r, c} = getCell(p.x, p.y);
   for (const b of bombs) {
-    if (b.timer < BOMB_TIMER_MS * 0.75) {
-      if (Math.abs(b.r-r)+Math.abs(b.c-c) <= range) {
-        if (bombReachesCell(b, r, c)) return true;
-      }
+    if (Math.abs(b.r-r)+Math.abs(b.c-c) <= range) {
+      if (bombReachesCell(b, r, c)) return true;
     }
   }
   return false;
@@ -1519,53 +1524,123 @@ function findSafeCell(r, c, searchRange) {
   return null;
 }
 
-function findTarget(p, pr, pc, cfg) {
-  // Look for nearest human player first (hunt), then destructible wall
+function findNearestPowerup(pr, pc, range) {
   let best = null, bestDist = 99999;
-
-  // Hunt players
-  players.forEach(target => {
-    if (!target.alive || target.id===p.id || target.isBot) return;
-    const tr=Math.floor(target.y/CELL), tc=Math.floor(target.x/CELL);
-    const d=Math.abs(tr-pr)+Math.abs(tc-pc);
-    if (d < bestDist && d <= cfg.fleeRange*2) { bestDist=d; best={r:tr,c:tc,isPlayer:true}; }
+  powerups.forEach(pu => {
+    const d = Math.abs(pu.r-pr) + Math.abs(pu.c-pc);
+    if (d < bestDist && d <= range) { bestDist=d; best={r:pu.r,c:pu.c}; }
   });
-  if (best) return best;
-
-  // Target nearby destructible walls
-  for (let dr=-6; dr<=6; dr++) {
-    for (let dc=-6; dc<=6; dc++) {
-      const nr=pr+dr, nc=pc+dc;
-      if (!grid[nr]||grid[nr][nc]!==2) continue;
-      // Aim for a cell adjacent to the wall
-      for (const [ar,ac] of [[nr-1,nc],[nr+1,nc],[nr,nc-1],[nr,nc+1]]) {
-        if (!grid[ar]||grid[ar][ac]!==0) continue;
-        const d=Math.abs(ar-pr)+Math.abs(ac-pc);
-        if (d < bestDist) { bestDist=d; best={r:ar,c:ac,isPlayer:false}; }
-      }
-    }
-  }
   return best;
 }
 
+function findSafeCellAfterBomb(br, bc, radius) {
+  // Simulate: if a bomb were at (br,bc), is there an adjacent safe cell?
+  for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+    const nr=br+dr, nc=bc+dc;
+    if (!grid[nr]||grid[nr][nc]!==0) continue;
+    // Check this cell wouldn't be hit by the bomb
+    if (!bombWouldReach(br,bc,radius,nr,nc)) return {r:nr,c:nc};
+  }
+  // Check 2 steps away
+  for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+    for (let dist=2; dist<=3; dist++) {
+      const nr=br+dr*dist, nc=bc+dc*dist;
+      if (!grid[nr]||grid[nr][nc]!==0) break;
+      if (!bombWouldReach(br,bc,radius,nr,nc)) return {r:nr,c:nc};
+    }
+  }
+  return null;
+}
+
+function bombWouldReach(br,bc,radius,tr,tc) {
+  if (br===tr && bc===tc) return true;
+  const dirs = [{dr:-1,dc:0},{dr:1,dc:0},{dr:0,dc:-1},{dr:0,dc:1}];
+  for (const {dr,dc} of dirs) {
+    for (let i=1; i<=radius; i++) {
+      const nr=br+dr*i, nc=bc+dc*i;
+      if (!grid[nr]||grid[nr][nc]===1) break;
+      if (nr===tr && nc===tc) return true;
+      if (grid[nr][nc]===2) break;
+    }
+  }
+  return false;
+}
+
+function findTarget(p, pr, pc, cfg) {
+  let best = null, bestDist = 99999;
+
+  // Hunt ALL alive players (including other bots)
+  players.forEach(target => {
+    if (!target.alive || target.id===p.id) return;
+    // In team mode, don't hunt teammates
+    if (teamMode && getPlayerTeam(target.id) === getPlayerTeam(p.id)) return;
+    const tr=Math.floor(target.y/CELL), tc=Math.floor(target.x/CELL);
+    const d=Math.abs(tr-pr)+Math.abs(tc-pc);
+    if (d < bestDist && d <= cfg.huntRange) { bestDist=d; best={r:tr,c:tc,isPlayer:true}; }
+  });
+  if (best && bestDist <= 8) return best; // prioritize close players
+
+  // Target nearby destructible walls (expand search)
+  let wallBest = null, wallDist = 99999;
+  const searchR = Math.min(10, cfg.huntRange);
+  for (let dr=-searchR; dr<=searchR; dr++) {
+    for (let dc=-searchR; dc<=searchR; dc++) {
+      const nr=pr+dr, nc=pc+dc;
+      if (!grid[nr]||grid[nr][nc]!==2) continue;
+      for (const [ar,ac] of [[nr-1,nc],[nr+1,nc],[nr,nc-1],[nr,nc+1]]) {
+        if (!grid[ar]||grid[ar][ac]!==0) continue;
+        const d=Math.abs(ar-pr)+Math.abs(ac-pc);
+        if (d < wallDist) { wallDist=d; wallBest={r:ar,c:ac,isPlayer:false}; }
+      }
+    }
+  }
+
+  // Return player target if in range, otherwise wall
+  if (best) return best;
+  return wallBest;
+}
+
 function decideDropBomb(p, pr, pc, cfg) {
-  // Drop if adjacent to destructible wall
+  // In team mode, never bomb if a teammate would be in the blast zone
+  if (teamMode) {
+    const myTeam = getPlayerTeam(p.id);
+    for (const ally of players) {
+      if (!ally.alive || ally.id===p.id) continue;
+      if (getPlayerTeam(ally.id) !== myTeam) continue;
+      const ar=Math.floor(ally.y/CELL), ac=Math.floor(ally.x/CELL);
+      if (bombWouldReach(pr, pc, p.blastRadius, ar, ac)) return false;
+    }
+  }
+  // Always bomb if adjacent to destructible wall
   for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
     const nr=pr+dr, nc=pc+dc;
     if (grid[nr]&&grid[nr][nc]===2) {
-      if (Math.random() < cfg.bombChance * 20) return true;
+      return Math.random() < 0.4 + cfg.trapSkill * 0.5;
     }
   }
-  // Drop if player nearby
+  // Aggressively bomb if player within blast radius
   for (const target of players) {
     if (!target.alive||target.id===p.id) continue;
+    if (teamMode && getPlayerTeam(target.id) === getPlayerTeam(p.id)) continue;
     const tr=Math.floor(target.y/CELL), tc=Math.floor(target.x/CELL);
-    if (Math.abs(tr-pr)+Math.abs(tc-pc) <= 3) {
-      if (Math.random() < cfg.bombChance * 15) return true;
+    const mDist = Math.abs(tr-pr)+Math.abs(tc-pc);
+    // Direct line of sight within blast radius — always bomb
+    if (mDist <= p.blastRadius && (tr===pr || tc===pc)) {
+      // Check line of sight (no walls between)
+      let blocked = false;
+      if (tr===pr) { for(let c=Math.min(pc,tc)+1;c<Math.max(pc,tc);c++) if(grid[pr][c]===1||grid[pr][c]===2){blocked=true;break;} }
+      else { for(let r=Math.min(pr,tr)+1;r<Math.max(pr,tr);r++) if(grid[r][pc]===1||grid[r][pc]===2){blocked=true;break;} }
+      if (!blocked) return true;
+    }
+    // Near player — high chance
+    if (mDist <= 3) return Math.random() < 0.3 + cfg.trapSkill * 0.6;
+    // Trap: bomb to cut off escape routes (hard bots)
+    if (cfg.trapSkill > 0.4 && mDist <= p.blastRadius + 2) {
+      return Math.random() < cfg.trapSkill * 0.4;
     }
   }
-  // Random chance
-  return Math.random() < cfg.bombChance;
+  // Low random chance while exploring
+  return Math.random() < cfg.bombChance * 0.5;
 }
 
 // BFS pathfinding
@@ -2180,9 +2255,9 @@ function quitGame(){
   isHost=false; mySlot=-1; lobbyPlayers=[];
   botCount=0; aiStates={};
   powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, SHOVEL:true, LIFE:true };
-  friendlyFire = false; teamMode = false;
+  friendlyFire = true; teamMode = false;
   const ffBtn=document.getElementById('btn-ff');
-  if(ffBtn){ffBtn.textContent='🔥 SELF-DAMAGE: OFF';ffBtn.classList.remove('active');}
+  if(ffBtn){ffBtn.textContent='🔥 FRIENDLY FIRE: ON';ffBtn.classList.add('active');}
   const tmBtn=document.getElementById('btn-teams');
   if(tmBtn){tmBtn.textContent='⚔️ FREE FOR ALL';tmBtn.classList.remove('active');}
   POWERUP_KEYS.forEach(k => { const el=document.getElementById('pu-'+k); if(el) el.classList.add('active'); });
@@ -2619,54 +2694,74 @@ document.addEventListener('touchend',e=>{
 
 // CHIPTUNE MUSIC ENGINE
 var Music=(function(){
-var actx=null,playing=null,nodes=[],timers=[],mg=null,VOL=0.04;
-function init(){if(!actx){actx=new(window.AudioContext||window.webkitAudioContext)();mg=actx.createGain();mg.gain.value=muted?0:VOL;mg.connect(actx.destination);}if(actx.state==='suspended')actx.resume();}
-function stop(){timers.forEach(function(id){clearTimeout(id)});timers=[];nodes.forEach(function(n){try{n.stop()}catch(e){}try{n.disconnect()}catch(e){}});nodes=[];playing=null;}
+var actx=null,playing=null,nodes=[],ltimers=[],mg=null,VOL=0.04,muted=false;
+
+function freshCtx(){
+  if(actx){try{actx.close();}catch(e){}}
+  actx=new(window.AudioContext||window.webkitAudioContext)();
+  mg=actx.createGain();
+  mg.gain.value=muted?0:VOL;
+  mg.connect(actx.destination);
+}
+
+function stop(){
+  ltimers.forEach(function(id){clearTimeout(id)});ltimers=[];
+  nodes.forEach(function(n){try{n.stop()}catch(e){}try{n.disconnect()}catch(e){}});
+  nodes=[];playing=null;
+}
+
 function NT(nm,oc){var s={C:0,"C#":1,D:2,"D#":3,E:4,F:5,"F#":6,G:7,"G#":8,A:9,"A#":10,B:11};return 440*Math.pow(2,(s[nm]+(oc-4)*12-9)/12);}
-function os(type,freq,start,dur,vol,det){var o=actx.createOscillator(),g=actx.createGain();o.type=type;o.frequency.value=freq;if(det)o.detune.value=det;g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(vol||0.3,start+0.01);g.gain.setValueAtTime(vol||0.3,start+dur-0.03);g.gain.linearRampToValueAtTime(0,start+dur);o.connect(g);g.connect(mg);o.start(start);o.stop(start+dur+0.05);nodes.push(o,g);}
-function nz(start,dur,vol){var len=Math.max(1,actx.sampleRate*dur|0);var buf=actx.createBuffer(1,len,actx.sampleRate);var d=buf.getChannelData(0);for(var i=0;i<d.length;i++)d[i]=Math.random()*2-1;var src=actx.createBufferSource();src.buffer=buf;var g=actx.createGain();var f=actx.createBiquadFilter();f.type="highpass";f.frequency.value=6000;g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(vol||0.05,start+0.005);g.gain.setValueAtTime(vol||0.05,start+dur*0.7);g.gain.linearRampToValueAtTime(0,start+dur);src.connect(f);f.connect(g);g.connect(mg);src.start(start);src.stop(start+dur+0.05);nodes.push(src,g,f);}
+
+function os(type,freq,start,dur,vol,det){
+  var o=actx.createOscillator(),g=actx.createGain();
+  o.type=type;o.frequency.value=freq;if(det)o.detune.value=det;
+  g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(vol||0.3,start+0.01);
+  g.gain.setValueAtTime(vol||0.3,start+dur-0.03);g.gain.linearRampToValueAtTime(0,start+dur);
+  o.connect(g);g.connect(mg);o.start(start);o.stop(start+dur+0.05);nodes.push(o,g);
+}
+
+function nz(start,dur,vol){
+  var len=Math.max(1,actx.sampleRate*dur|0);var buf=actx.createBuffer(1,len,actx.sampleRate);
+  var d=buf.getChannelData(0);for(var i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  var src=actx.createBufferSource();src.buffer=buf;var g=actx.createGain();
+  var f=actx.createBiquadFilter();f.type="highpass";f.frequency.value=6000;
+  g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(vol||0.05,start+0.005);
+  g.gain.setValueAtTime(vol||0.05,start+dur*0.7);g.gain.linearRampToValueAtTime(0,start+dur);
+  src.connect(f);f.connect(g);g.connect(mg);src.start(start);src.stop(start+dur+0.05);nodes.push(src,g,f);
+}
 
 function playGame(){
-  init();stop();playing="game";
+  stop();freshCtx();playing="game";
   var BPM=150,beat=60/BPM,bar=beat*4,loopLen=bar*8;
-  function startLoop(){
-    function sched(){
-      if(playing!=="game")return;
-      var now=actx.currentTime+0.05;
-      var bass="AAAAAAAAAAAAAAAAFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDDDEEEEEEEEEEEEEEEE".split("");
-      bass.forEach(function(n,i){var t=now+i*(beat/2);os("sawtooth",NT(n,2),t,beat/2-0.02,i%4===0?0.35:0.2);});
-      for(var i=0;i<32;i++){var t=now+i*(beat/2);nz(t,0.04,0.06);if(i%4===0){os("square",55,t,0.1,0.25);os("square",40,t+0.01,0.08,0.15);}if(i%4===2){nz(t,0.1,0.12);os("square",180,t,0.05,0.08);}}
-      var mel=[["A",4,1],["C",5,.5],["E",5,.5],["A",5,.5],["E",5,.5],["C",5,.5],["A",4,.5],["B",4,.5],["E",5,.5],["F",4,1],["A",4,.5],["C",5,.5],["F",5,.5],["C",5,.5],["A",4,.5],["F",4,.5],["G",4,.5],["A",4,.5],["D",5,1],["F",5,.5],["A",5,.5],["D",5,.5],["C",5,.5],["A",4,.5],["F",4,.5],["E",4,.5],["D",4,.5],["E",5,1],["G#",5,.5],["B",5,.5],["E",5,.5],["D",5,.5],["B",4,.5],["G#",4,.5],["A",4,.5],["E",4,.5]];
-      var mt=0;mel.forEach(function(m){var t=now+mt*beat;os("square",NT(m[0],m[1]),t,m[2]*beat-0.03,0.12,6);os("square",NT(m[0],m[1]),t+0.03,m[2]*beat*0.6,0.04,-6);mt+=m[2];});
-      var arps=[[["A",3],["C",4],["E",4]],[["A",3],["C",4],["E",4]],[["F",3],["A",3],["C",4]],[["F",3],["A",3],["C",4]],[["D",3],["F",3],["A",3]],[["D",3],["F",3],["A",3]],[["E",3],["G#",3],["B",3]],[["E",3],["G#",3],["B",3]]];
-      arps.forEach(function(ch,bi){for(var s=0;s<8;s++){var nd=ch[s%ch.length];os("triangle",NT(nd[0],nd[1]),now+bi*bar+s*(beat/2),beat/2-0.04,0.06);}});
-      timers.push(setTimeout(sched,(loopLen-0.5)*1000));
-    }
-    sched();
+  function sched(){
+    if(playing!=="game"||!actx)return;
+    var now=actx.currentTime+0.05;
+    var bass="AAAAAAAAAAAAAAAAFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDDDEEEEEEEEEEEEEEEE".split("");
+    bass.forEach(function(n,i){var t=now+i*(beat/2);os("sawtooth",NT(n,2),t,beat/2-0.02,i%4===0?0.35:0.2);});
+    for(var i=0;i<32;i++){var t=now+i*(beat/2);nz(t,0.04,0.06);if(i%4===0){os("square",55,t,0.1,0.25);os("square",40,t+0.01,0.08,0.15);}if(i%4===2){nz(t,0.1,0.12);os("square",180,t,0.05,0.08);}}
+    var mel=[["A",4,1],["C",5,.5],["E",5,.5],["A",5,.5],["E",5,.5],["C",5,.5],["A",4,.5],["B",4,.5],["E",5,.5],["F",4,1],["A",4,.5],["C",5,.5],["F",5,.5],["C",5,.5],["A",4,.5],["F",4,.5],["G",4,.5],["A",4,.5],["D",5,1],["F",5,.5],["A",5,.5],["D",5,.5],["C",5,.5],["A",4,.5],["F",4,.5],["E",4,.5],["D",4,.5],["E",5,1],["G#",5,.5],["B",5,.5],["E",5,.5],["D",5,.5],["B",4,.5],["G#",4,.5],["A",4,.5],["E",4,.5]];
+    var mt=0;mel.forEach(function(m){var t=now+mt*beat;os("square",NT(m[0],m[1]),t,m[2]*beat-0.03,0.12,6);os("square",NT(m[0],m[1]),t+0.03,m[2]*beat*0.6,0.04,-6);mt+=m[2];});
+    var arps=[[["A",3],["C",4],["E",4]],[["A",3],["C",4],["E",4]],[["F",3],["A",3],["C",4]],[["F",3],["A",3],["C",4]],[["D",3],["F",3],["A",3]],[["D",3],["F",3],["A",3]],[["E",3],["G#",3],["B",3]],[["E",3],["G#",3],["B",3]]];
+    arps.forEach(function(ch,bi){for(var s=0;s<8;s++){var nd=ch[s%ch.length];os("triangle",NT(nd[0],nd[1]),now+bi*bar+s*(beat/2),beat/2-0.04,0.06);}});
+    ltimers.push(setTimeout(sched,(loopLen-0.5)*1000));
   }
-  if(actx.state==="suspended"){actx.resume().then(startLoop);}else{startLoop();}
+  sched();
 }
 
 function playVictory(){
-  init();stop();playing="victory";
-  function startFanfare(){
-    var now=actx.currentTime+0.05,BPM=140,beat=60/BPM;
-    var fan=[["C",5,.5],["E",5,.5],["G",5,.5],["C",6,1],["B",5,.25],["C",6,.25],["B",5,.25],["C",6,.75],["G",5,.5],["E",5,.5],["G",5,.5],["C",6,1.5]];
-    var t=0;fan.forEach(function(m){var st=now+t*beat;os("square",NT(m[0],m[1]),st,m[2]*beat-0.02,0.15,4);os("triangle",NT(m[0],m[1]-1),st,m[2]*beat-0.02,0.08);t+=m[2];});
-    [[0,"C",3,1],[2,"G",2,1],[3,"C",3,.5],[3.5,"E",3,.5],[4,"C",3,2]].forEach(function(b){os("sawtooth",NT(b[1],b[2]),now+b[0]*beat,b[3]*beat-0.02,0.2);});
-    for(var i=0;i<4;i++)nz(now+i*beat,0.06,0.08);nz(now+4*beat,0.4,0.1);
-    ["C","E","G","C","E","G","C","E"].forEach(function(n,i){os("triangle",NT(n,4+Math.floor(i/3)),now+(5+i*0.12)*beat,0.3,0.07);});
-  }
-  if(actx.state==="suspended"){actx.resume().then(startFanfare);}else{startFanfare();}
+  stop();freshCtx();playing="victory";
+  var now=actx.currentTime+0.05,BPM=140,beat=60/BPM;
+  var fan=[["C",5,.5],["E",5,.5],["G",5,.5],["C",6,1],["B",5,.25],["C",6,.25],["B",5,.25],["C",6,.75],["G",5,.5],["E",5,.5],["G",5,.5],["C",6,1.5]];
+  var t=0;fan.forEach(function(m){var st=now+t*beat;os("square",NT(m[0],m[1]),st,m[2]*beat-0.02,0.15,4);os("triangle",NT(m[0],m[1]-1),st,m[2]*beat-0.02,0.08);t+=m[2];});
+  [[0,"C",3,1],[2,"G",2,1],[3,"C",3,.5],[3.5,"E",3,.5],[4,"C",3,2]].forEach(function(b){os("sawtooth",NT(b[1],b[2]),now+b[0]*beat,b[3]*beat-0.02,0.2);});
+  for(var i=0;i<4;i++)nz(now+i*beat,0.06,0.08);nz(now+4*beat,0.4,0.1);
+  ["C","E","G","C","E","G","C","E"].forEach(function(n,i){os("triangle",NT(n,4+Math.floor(i/3)),now+(5+i*0.12)*beat,0.3,0.07);});
 }
 
-var muted=false;
 function toggleMute(){muted=!muted;if(mg)mg.gain.value=muted?0:VOL;return muted;}
-function isMuted(){return muted;}
-return{playGame:playGame,playVictory:playVictory,stop:stop,init:init,toggleMute:toggleMute,isMuted:isMuted};
+function init(){}
+return{playGame:playGame,playVictory:playVictory,stop:stop,init:init,toggleMute:toggleMute};
 })();
-document.addEventListener("click",function(){Music.init();});
-document.addEventListener("touchstart",function(){Music.init();});
 </script>
 </body>
 </html>
