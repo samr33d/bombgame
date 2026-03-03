@@ -9,22 +9,25 @@
 @import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;600;700&display=swap');
 
 :root {
-  --bg: #08080f;
-  --surface: #0f1019;
-  --surface2: #151520;
-  --border: #1e1e30;
-  --border-light: #2a2a40;
-  --text: #e8e8f0;
-  --text-dim: #9a9ab4;
-  --text-muted: #70708a;
-  --accent: #ff2d55;
-  --accent-dim: rgba(255,45,85,0.15);
-  --gold: #ffd700;
-  --gold-dim: rgba(255,215,0,0.12);
-  --cyan: #00d4ff;
-  --cyan-dim: rgba(0,212,255,0.12);
-  --green: #34d058;
-  --green-dim: rgba(52,208,88,0.15);
+  --bg: #060608;
+  --surface: #0d0d12;
+  --surface2: #131318;
+  --border: #1a1a24;
+  --border-light: #26263a;
+  --text: #f0f0f5;
+  --text-dim: #a0a0b8;
+  --text-muted: #686880;
+  --accent: #ff4444;
+  --accent-dim: rgba(255,68,68,0.15);
+  --gold: #00e861;
+  --gold-dim: rgba(0,232,97,0.12);
+  --cyan: #2baaff;
+  --cyan-dim: rgba(43,170,255,0.12);
+  --green: #00e861;
+  --green-dim: rgba(0,232,97,0.15);
+  --orange: #ff6b35;
+  --pink: #ff5ca0;
+  --purple: #9b6bff;
   --radius: 6px;
 }
 
@@ -145,7 +148,7 @@ header {
 .room-code-display {
   font-size: 2.4rem; letter-spacing: 10px;
   color: var(--gold); background: var(--bg);
-  border: 1px dashed rgba(255,215,0,0.25); border-radius: var(--radius);
+  border: 1px dashed rgba(0,232,97,0.3); border-radius: var(--radius);
   padding: 16px; text-align: center; margin: 10px 0 8px;
   cursor: pointer; transition: background 0.15s;
 }
@@ -554,8 +557,8 @@ function randomName(){ return PLAYER_NAMES[Math.floor(Math.random()*PLAYER_NAMES
 const BOT_NAMES = ['SAURON','GOLLUM','SARUMAN','WORMTNG','LURTZ','GOTHMOG','AZOG','BOLG','SHELOB','UNGOLNT'];
 let selectedAIDifficulty = 'medium';
 
-const COLORS = ['#ff3c5a','#00e5ff','#aaff44','#ffaa00','#cc44ff','#ff88cc','#44ffcc','#ffff44'];
-const DARKS  = ['#7a0020','#007a80','#447700','#7a4400','#660099','#882255','#007755','#888800'];
+const COLORS = ['#ff4444','#2baaff','#00e861','#ffb320','#9b6bff','#ff5ca0','#00ddb5','#ff6b35'];
+const DARKS  = ['#801818','#0e4a80','#006830','#805a10','#4a2e80','#80264a','#006850','#80300e'];
 
 const POWER_UP_TYPES = {
   BLAST:  { icon:'🔥', color:'#ff6b35', label:'BIGGER BLAST' },
@@ -670,6 +673,7 @@ function toggleTeamMode() {
   const btn = document.getElementById('btn-teams');
   btn.textContent = teamMode ? '🤝 TEAMS (2v2v...)' : '⚔️ FREE FOR ALL';
   btn.classList.toggle('active', teamMode);
+  reassignSlots();
   renderLobbyList();
   broadcastLobby();
 }
@@ -678,7 +682,8 @@ function getPlayerTeam(playerId) {
   return playerId % 2; // 0 = Team Red, 1 = Team Blue
 }
 
-const TEAM_COLORS = ['#ff4466','#4488ff'];
+const TEAM_COLORS = ['#ff4444','#2baaff'];
+const TEAM_DARKS  = ['#7a0020','#0055aa'];
 const TEAM_NAMES = ['RED','BLUE'];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -809,7 +814,15 @@ function handleHostReceive(peerId, data) {
 }
 
 function reassignSlots() {
-  lobbyPlayers.forEach((p,i) => { p.id=i; p.color=COLORS[i]; p.dark=DARKS[i]; });
+  lobbyPlayers.forEach((p,i) => {
+    p.id=i;
+    if(teamMode) {
+      const t = getPlayerTeam(i);
+      p.color=TEAM_COLORS[t]; p.dark=TEAM_DARKS[t];
+    } else {
+      p.color=COLORS[i]; p.dark=DARKS[i];
+    }
+  });
 }
 
 function broadcastLobby() {
@@ -828,9 +841,11 @@ function renderLobbyList() {
     const availNames = BOT_NAMES.filter(n=>!usedNames.has(n));
     for (let i=0; i<botCount && displayPlayers.length<MAX_PLAYERS; i++) {
       const slot = displayPlayers.length;
+      const botColor = teamMode ? TEAM_COLORS[getPlayerTeam(slot)] : COLORS[slot];
+      const botDark = teamMode ? TEAM_DARKS[getPlayerTeam(slot)] : DARKS[slot];
       displayPlayers.push({
         peerId:'BOT_'+i, id:slot, name:availNames[i%availNames.length],
-        color:COLORS[slot], dark:DARKS[slot], isBot:true, aiDifficulty:selectedAIDifficulty,
+        color:botColor, dark:botDark, isBot:true, aiDifficulty:selectedAIDifficulty,
       });
     }
   }
@@ -1080,9 +1095,11 @@ function initGameState() {
     for (let i=0; i<botCount && allPlayers.length<MAX_PLAYERS; i++) {
       const slot = allPlayers.length;
       const bname = availNames[i % availNames.length];
+      const botColor = teamMode ? TEAM_COLORS[getPlayerTeam(slot)] : COLORS[slot];
+      const botDark = teamMode ? TEAM_DARKS[getPlayerTeam(slot)] : DARKS[slot];
       allPlayers.push({
         peerId: 'BOT_'+i, id: slot,
-        name: bname, color: COLORS[slot], dark: DARKS[slot],
+        name: bname, color: botColor, dark: botDark,
         isBot: true, aiDifficulty: selectedAIDifficulty,
       });
     }
@@ -1579,7 +1596,6 @@ function simTick() {
   players.forEach(p => { if(p.alive) simPlayer(p, dt); });
   simBombs(dt);
   simExplosions(dt);
-  spawnPowerups();
   checkWin();
   broadcastState();
 }
@@ -1759,7 +1775,7 @@ function explodeBomb(bomb){
         grid[r2][c2]=0;
         pendingGridChanges.push({r:r2,c:c2,v:0});
         // Chance to drop power-up
-        if(Math.random()<0.25) spawnPowerupAt(r2,c2);
+        if(Math.random()<0.35) spawnPowerupAt(r2,c2);
         break;
       }
     }
@@ -1787,19 +1803,6 @@ function spawnPowerupAt(r,c){
     if (roll <= 0) { type = k; break; }
   }
   powerups.push({r,c,type,id:puIdCounter++,bob:Math.random()*Math.PI*2});
-}
-
-function spawnPowerups(){
-  if(getEnabledPowerupKeys().length===0) return;
-  if(Math.random()<0.002&&powerups.length<lobbyPlayers.length*3){
-    for(let attempts=0;attempts<20;attempts++){
-      const r=1+Math.floor(Math.random()*(ROWS-2));
-      const c=1+Math.floor(Math.random()*(COLS-2));
-      if(grid[r][c]===0&&!powerups.some(p=>p.r===r&&p.c===c)){
-        spawnPowerupAt(r,c); break;
-      }
-    }
-  }
 }
 
 function collectPowerup(p, idx){
@@ -2263,7 +2266,7 @@ let floorGrads = null;
 function getFloorGrad(ctx, even) {
   if (!floorGrads) floorGrads = {};
   // Simple color — no gradient needed per-tile
-  return even ? '#090a14' : '#0b0c18';
+  return even ? '#07070c' : '#0a0a10';
 }
 
 function render(dt){
@@ -2282,7 +2285,7 @@ function render(dt){
   // ── Floor ──
   for(let r=r0;r<r1;r++){
     for(let c=c0;c<c1;c++){
-      ctx.fillStyle=(r+c)%2===0?'#090a14':'#0b0c18';
+      ctx.fillStyle=(r+c)%2===0?'#07070c':'#0a0a10';
       ctx.fillRect(c*CELL,r*CELL,CELL,CELL);
     }
   }
@@ -2293,24 +2296,24 @@ function render(dt){
       const v=grid[r]&&grid[r][c];
       if(v===1){
         const x=c*CELL,y=r*CELL;
-        ctx.fillStyle='#141424'; ctx.fillRect(x,y,CELL,CELL);
-        ctx.fillStyle='#1e1e38'; ctx.fillRect(x,y,CELL,3);
-        ctx.fillStyle='#0a0a18'; ctx.fillRect(x+CELL-2,y,2,CELL);
-        ctx.fillStyle='#1a1a30'; ctx.fillRect(x+3,y+3,CELL-6,CELL-6);
+        ctx.fillStyle='#101018'; ctx.fillRect(x,y,CELL,CELL);
+        ctx.fillStyle='#1a1a28'; ctx.fillRect(x,y,CELL,3);
+        ctx.fillStyle='#080810'; ctx.fillRect(x+CELL-2,y,2,CELL);
+        ctx.fillStyle='#16162a'; ctx.fillRect(x+3,y+3,CELL-6,CELL-6);
         // Grid detail
-        ctx.fillStyle='rgba(100,100,160,0.06)';
+        ctx.fillStyle='rgba(80,80,140,0.06)';
         ctx.fillRect(x+CELL/2-3,y+CELL/2-3,6,6);
       } else if(v===2){
         const x=c*CELL,y=r*CELL;
-        ctx.fillStyle='#1a1208'; ctx.fillRect(x,y,CELL,CELL);
-        ctx.fillStyle='#241a0c'; ctx.fillRect(x+1,y+1,CELL-2,CELL-2);
+        ctx.fillStyle='#1a1006'; ctx.fillRect(x,y,CELL,CELL);
+        ctx.fillStyle='#261808'; ctx.fillRect(x+1,y+1,CELL-2,CELL-2);
         for(let bi=0;bi<3;bi++){
           const yo=bi*12+1,xo=bi%2===0?0:CELL/3;
-          ctx.fillStyle='#3d2410';
+          ctx.fillStyle='#3a200c';
           ctx.fillRect(x+xo+1,y+yo,CELL/3*2-2,9);
           if(xo+CELL/3*2+1<CELL) ctx.fillRect(x+xo+CELL/3*2+1,y+yo,CELL/3-2,9);
         }
-        ctx.fillStyle='#5a3018';
+        ctx.fillStyle='#4a2a10';
         ctx.fillRect(x,y,CELL,2); ctx.fillRect(x,y,2,CELL);
         // Crack details
         ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=1;
@@ -2330,7 +2333,7 @@ function render(dt){
       ctx.save();
       ctx.globalAlpha=t*0.45;
       const grd=ctx.createRadialGradient(c*CELL+CELL/2,r*CELL+CELL/2,0,c*CELL+CELL/2,r*CELL+CELL/2,CELL);
-      grd.addColorStop(0,'#ffcc00'); grd.addColorStop(0.5,'#ff4400'); grd.addColorStop(1,'transparent');
+      grd.addColorStop(0,'#ffcc00'); grd.addColorStop(0.5,'#ff5500'); grd.addColorStop(1,'transparent');
       ctx.fillStyle=grd;
       ctx.fillRect(c*CELL-CELL*0.3,r*CELL-CELL*0.3,CELL*1.6,CELL*1.6);
       ctx.restore();
@@ -2365,20 +2368,20 @@ function render(dt){
     const br=CELL*0.32*pulse;
     const urgency=1-b.timer/b.maxTimer;
     ctx.save();
-    ctx.shadowColor=urgency>0.6?'#ff2222':'#ff8800'; ctx.shadowBlur=16+pulse*8;
-    ctx.fillStyle='#111';
+    ctx.shadowColor=urgency>0.6?'#ff3030':'#ff8800'; ctx.shadowBlur=16+pulse*8;
+    ctx.fillStyle='#0a0a0a';
     ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle=urgency>0.6?'#ff3c3c':'#ffaa00';
+    ctx.strokeStyle=urgency>0.6?'#ff4444':'#ffb320';
     ctx.lineWidth=2; ctx.stroke();
     // Highlight
     ctx.fillStyle='rgba(255,255,255,0.15)';
     ctx.beginPath(); ctx.arc(bx-br*0.3,by-br*0.3,br*0.4,0,Math.PI*2); ctx.fill();
     // Fuse
-    ctx.strokeStyle='#ffaa44'; ctx.lineWidth=1.5;
+    ctx.strokeStyle='#ff9933'; ctx.lineWidth=1.5;
     ctx.beginPath(); ctx.moveTo(bx,by-br);
     ctx.quadraticCurveTo(bx+br*0.9,by-br*1.3,bx+br*0.5,by-br*1.7); ctx.stroke();
     // Spark
-    ctx.fillStyle=urgency>0.5?'#ff4444':'#ffffaa';
+    ctx.fillStyle=urgency>0.5?'#ff4444':'#ffee88';
     ctx.shadowColor='#fff'; ctx.shadowBlur=6;
     ctx.beginPath(); ctx.arc(bx+br*0.5,by-br*1.7,2.5,0,Math.PI*2); ctx.fill();
     // Owner dot
