@@ -448,7 +448,18 @@ header {
     <div class="notes-title">📋 RELEASE NOTES</div>
 
     <div class="note-entry">
-      <div class="note-version">v1.4 — LATEST</div>
+      <div class="note-version">v1.5 — LATEST</div>
+      <div class="note-items">
+        Death animation: expanding shockwave ring, spinning body fragments, skull icon on elimination<br>
+        Players freeze in place during 1.2s death anim before respawning<br>
+        Fixed host player double-speed movement bug<br>
+        Power-up names updated across all UI (Blast Radius, Speed Boost, Ghost Mode, etc.)<br>
+        Power-up emoji swap: 💥 Blast Radius, 🔥 Fire Bomb
+      </div>
+    </div>
+
+    <div class="note-entry">
+      <div class="note-version">v1.4</div>
       <div class="note-items">
         ❄️ Freeze power-up restored with full-screen ice animation<br>
         Frozen players encased in visible ice block with crystal sparkles<br>
@@ -1149,7 +1160,7 @@ function broadcastState() {
       dir:p.dir, walkFrame:p.walkFrame, invincible:p.invincible>0,
       frozen:p.frozen>0, shield:p.shield, speedBoost:p.speedBoost||0, ghostTimer:p.ghostTimer||0, shovelTimer:p.shovelTimer||0, defuseTimer:p.defuseTimer||0, fireTimer:p.fireTimer||0,
       blastRadius:p.blastRadius, maxBombs:p.maxBombs, kills:p.kills,
-      isBot:p.isBot||false,
+      isBot:p.isBot||false, deathAnim:p.deathAnim||0, deathX:p.deathX||0, deathY:p.deathY||0,
     })),
     bombs: bombs.map(b => ({r:b.r,c:b.c,owner:b.owner,timer:b.timer,maxTimer:b.maxTimer,radius:b.radius,pulse:b.pulse||0,passthrough:b.passthrough||{},fire:b.fire||false})),
     explosions: explosions.map(e => ({cells:e.cells,timer:e.timer,maxTimer:e.maxTimer})),
@@ -1274,7 +1285,9 @@ function handleClientReceive(data) {
         const clientGridC = lp.gridC;
         const tileDrift = Math.abs(hostGridR-clientGridR) + Math.abs(hostGridC-clientGridC);
         const justRespawned = !lp.alive && sp.alive;
-        if (tileDrift > 3 || justRespawned) {
+        // Detect respawn after death anim: we had deathAnim, host no longer does, and tiles differ
+        const deathAnimEnded = lp.deathAnim > 0 && (sp.deathAnim||0) <= 0 && tileDrift > 0;
+        if (tileDrift > 3 || justRespawned || deathAnimEnded) {
           // Major desync, respawn, or lag spike — hard snap to host
           const hostX = sp.x || (sp.targetC*CELL+CELL/2);
           const hostY = sp.y || (sp.targetR*CELL+CELL/2);
@@ -1287,7 +1300,7 @@ function handleClientReceive(data) {
         lp.shield=sp.shield; lp.frozen=sp.frozen?500:0;
         lp.speedBoost=sp.speedBoost||0; lp.ghostTimer=sp.ghostTimer||0; lp.shovelTimer=sp.shovelTimer||0; lp.defuseTimer=sp.defuseTimer||0; lp.fireTimer=sp.fireTimer||0;
         lp.blastRadius=sp.blastRadius; lp.maxBombs=sp.maxBombs;
-        lp.kills=sp.kills||0;
+        lp.kills=sp.kills||0; lp.deathAnim=sp.deathAnim||0; lp.deathX=sp.deathX||0; lp.deathY=sp.deathY||0;
       } else {
         // Other players: store server position as target, interpolate in render loop
         lp._serverX = sp.x; lp._serverY = sp.y;
@@ -1298,7 +1311,7 @@ function handleClientReceive(data) {
         lp.frozen=sp.frozen?500:0; lp.shield=sp.shield;
         lp.speedBoost=sp.speedBoost||0;
         lp.ghostTimer=sp.ghostTimer||0; lp.shovelTimer=sp.shovelTimer||0; lp.defuseTimer=sp.defuseTimer||0; lp.fireTimer=sp.fireTimer||0;
-        lp.kills=sp.kills||0;
+        lp.kills=sp.kills||0; lp.deathAnim=sp.deathAnim||0; lp.deathX=sp.deathX||0; lp.deathY=sp.deathY||0;
       }
     });
     bombs = data.bombs.map(b=>({...b}));
@@ -1599,6 +1612,7 @@ function initGameState() {
       alive: true, lives: startLives,
       bombCooldown: 0, maxBombs: 2, activeBombs: 0,
       invincible: 0, frozen: 0, shield: false, speedBoost: 0, ghostTimer: 0, shovelTimer: 0, defuseTimer: 0, fireTimer: 0,
+      deathAnim: 0, deathX: 0, deathY: 0,
       blastRadius: DEFAULT_BOMB_RADIUS,
       dir:'down', walkFrame:0, walkTimer:0, kills: 0,
     };
@@ -2178,7 +2192,15 @@ function simTick() {
   // Apply bot movement inputs
   players.forEach(p => { if(p.alive && p.isBot) applyBotMovement(p, dt); });
 
-  players.forEach(p => { if(p.alive) simPlayer(p, dt); });
+  players.forEach(p => {
+    if(p.alive) simPlayer(p, dt);
+    else if(p.deathAnim > 0) {
+      // Tick death animation for eliminated players
+      p.deathAnim -= dt;
+      if(Math.random() < 0.2) spawnParticles(p.deathX, p.deathY, p.color, 1);
+      if(p.deathAnim <= 0) p.deathAnim = 0;
+    }
+  });
   simBombs(dt);
   simExplosions(dt);
   simFires(dt);
@@ -2195,8 +2217,29 @@ function simPlayer(p, dt) {
   const skipPixelMove = !!p._visualMoved;
   if(p._visualMoved) p._visualMoved = false;
 
+  // Death animation countdown
+  if (p.deathAnim > 0) {
+    p.deathAnim -= dt;
+    // Spawn particles during animation
+    if (Math.random() < 0.3) spawnParticles(p.deathX, p.deathY, p.color, 2);
+    if (p.deathAnim <= 0) {
+      p.deathAnim = 0;
+      // Respawn if has lives
+      if (p._pendingRespawn && p.alive) {
+        p._pendingRespawn = false;
+        const spawns = getSpawnPositions();
+        const sp = spawns[p.id % spawns.length];
+        p.x = sp.c*CELL+CELL/2; p.y = sp.r*CELL+CELL/2;
+        p.gridR = sp.r; p.gridC = sp.c; p.targetR = sp.r; p.targetC = sp.c;
+        spawnParticles(p.x, p.y, '#ffffff', 12);
+      }
+    }
+    // Don't process movement during death anim
+    // Still tick timers below
+  }
+
   if (p.frozen > 0) { p.frozen-=dt; }
-  else {
+  else if (p.deathAnim <= 0) {
     // Grid-based tile movement with carry-over for smoothness
     const spdMult = 1 + (p.speedBoost||0) * 0.06;
     let budget = PLAYER_SPEED * spdMult * (dt/16);
@@ -2576,23 +2619,32 @@ function collectPowerup(p, idx){
 function hitPlayer(p, ownerSlot){
   if(p.shield){ p.shield=false; p.invincible=1000; return; }
   p.lives--;
-  p.invincible=2500;
-  const owner=ownerSlot!==undefined?players.find(p=>p.id===ownerSlot):null;
+  const owner=ownerSlot!==undefined?players.find(pl=>pl.id===ownerSlot):null;
+
+  // Start death animation at current position
+  p.deathAnim = 1200; // ms of death animation
+  p.deathX = p.x;
+  p.deathY = p.y;
+  p.frozen = 1200; // freeze during death anim
+  p.invincible = 1200 + 2500; // invincible through anim + after respawn
+
+  spawnParticles(p.x, p.y, p.color, 25);
+
   if(p.lives<=0){
     p.alive=false;
+    p.deathAnim = 1500; // slightly longer for final death
     if(owner&&owner.id!==p.id){ owner.kills=(owner.kills||0)+1; }
     const msg=owner&&owner.id!==p.id?`${owner.name} ELIMINATED ${p.name}`:`${p.name} SELF DESTRUCTED`;
     const col=owner?owner.color:p.color;
     Object.values(clientConns).forEach(c=>c.send({type:'KILL_FEED',msg,color:col}));
     addKillFeed(msg, col);
-    spawnParticles(p.x,p.y,p.color,20);
-    explosions.push({cells:[{r:Math.floor(p.y/CELL),c:Math.floor(p.x/CELL)}],timer:500,maxTimer:500,owner:ownerSlot});
   } else {
-    const spawns=getSpawnPositions();
-    const sp=spawns[p.id%spawns.length];
-    p.x=sp.c*CELL+CELL/2; p.y=sp.r*CELL+CELL/2;
-    p.gridR=sp.r; p.gridC=sp.c; p.targetR=sp.r; p.targetC=sp.c;
-    spawnParticles(p.x,p.y,p.color,8);
+    const msg=owner&&owner.id!==p.id?`${owner.name} KILLED ${p.name}`:`${p.name} SELF DESTRUCTED`;
+    const col=owner?owner.color:p.color;
+    Object.values(clientConns).forEach(c=>c.send({type:'KILL_FEED',msg,color:col}));
+    addKillFeed(msg, col);
+    // Schedule respawn — handled in simPlayer when deathAnim expires
+    p._pendingRespawn = true;
   }
   updateHUD();
 }
@@ -2924,7 +2976,7 @@ function renderLoop(ts){
     if(isHost) {
       // Host: smooth visual interpolation between 30hz sim ticks
       const me=players.find(p=>p.id===mySlot);
-      if(me&&me.alive&&!me.frozen) {
+      if(me&&me.alive&&!me.frozen&&me.deathAnim<=0) {
         const tx = me.targetC * CELL + CELL/2;
         const ty = me.targetR * CELL + CELL/2;
         const dx = tx - me.x;
@@ -2949,9 +3001,10 @@ function renderLoop(ts){
       const lerpSpeed = 1 - Math.pow(0.02, dt/16);
       players.forEach(p => {
         if(p.id===mySlot || !p.alive) return;
+        if(p.deathAnim > 0) return; // frozen at death position during anim
         if(p._serverX!==undefined) {
           const dist = Math.abs(p.x-p._serverX)+Math.abs(p.y-p._serverY);
-          if(dist > CELL*4) {
+          if(dist > CELL*2) {
             p.x = p._serverX;
             p.y = p._serverY;
           } else {
@@ -2973,6 +3026,7 @@ function renderLoop(ts){
 // toward their target tile between sim ticks, without changing authoritative state
 function clientPredictMe(p,dt){
   if(p.frozen>0) return;
+  if(p.deathAnim>0) return;
   const inp=buildMyInput();
   const spdMult = 1 + (p.speedBoost||0) * 0.06;
   let budget = PLAYER_SPEED*spdMult*(dt/16);
@@ -3256,9 +3310,66 @@ function render(dt){
     ctx.restore();
   });
 
+  // ── Death Animations ──
+  players.forEach(p=>{
+    if(p.deathAnim<=0) return;
+    const dx=p.deathX, dy=p.deathY;
+    const t=p.deathAnim / (p.alive ? 1200 : 1500); // normalized 1→0
+    const s=CELL*0.36;
+    ctx.save();
+
+    // Expanding shockwave ring
+    const ringRadius = CELL * (1 - t) * 2.5;
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = Math.max(1, 4 * t);
+    ctx.globalAlpha = t * 0.8;
+    ctx.beginPath();
+    ctx.arc(dx, dy, ringRadius, 0, Math.PI*2);
+    ctx.stroke();
+
+    // Inner flash
+    if(t > 0.5) {
+      ctx.globalAlpha = (t - 0.5) * 2;
+      const grd = ctx.createRadialGradient(dx, dy, 0, dx, dy, CELL*0.8);
+      grd.addColorStop(0, '#ffffff');
+      grd.addColorStop(0.5, p.color);
+      grd.addColorStop(1, 'transparent');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(dx, dy, CELL*0.8, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // Spinning body fragments
+    const fragCount = 6;
+    const spin = (1 - t) * Math.PI * 4;
+    const spread = (1 - t) * CELL * 2;
+    ctx.globalAlpha = t;
+    for(let i=0; i<fragCount; i++) {
+      const angle = (i / fragCount) * Math.PI * 2 + spin;
+      const fx = dx + Math.cos(angle) * spread;
+      const fy = dy + Math.sin(angle) * spread - (1-t) * CELL * 0.5;
+      const fragSize = s * 0.35 * t;
+      ctx.fillStyle = i % 2 === 0 ? p.color : (p.dark || '#333');
+      ctx.fillRect(fx - fragSize/2, fy - fragSize/2, fragSize, fragSize);
+    }
+
+    // Skull icon for elimination
+    if(!p.alive && t < 0.6) {
+      ctx.globalAlpha = (0.6 - t) * 2.5;
+      ctx.font = `${CELL * 0.7}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('💀', dx, dy - (1-t) * CELL);
+    }
+
+    ctx.restore();
+  });
+
   // ── Players ──
   players.forEach(p=>{
     if(!p.alive) return;
+    if(p.deathAnim > 0) return; // hidden during death animation
     if(p.invincible>0&&Math.floor(p.invincible/70)%2===0) return;
     const px=Math.round(p.x), py=Math.round(p.y);
     const s=CELL*0.36;
