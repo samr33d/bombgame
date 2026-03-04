@@ -556,7 +556,8 @@ header {
         <div class="field-label">RULES</div>
         <div class="mode-select">
           <button class="mode-btn active" onclick="toggleFriendlyFire()" id="btn-ff">🔥 FRIENDLY FIRE: ON</button>
-          <button class="mode-btn" onclick="toggleTeamMode()" id="btn-teams">⚔️ FREE FOR ALL</button>
+          <button class="mode-btn active" onclick="toggleTeamMode()" id="btn-teams">⚔️ FREE FOR ALL</button>
+          <button class="mode-btn active" onclick="toggleSolidBombs()" id="btn-solidbombs">💣 BOMBS: SOLID</button>
         </div>
       </div>
 
@@ -716,6 +717,7 @@ let selectedMode = 'classic';
 let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, SHOVEL:true, LIFE:true };
 let friendlyFire = true; // self-damage from own bombs
 let teamMode = false; // false = FFA, true = 2 teams
+let solidBombs = true; // false = pass through, true = bombs block movement
 
 let grid = [];
 let powerups = [];
@@ -799,12 +801,19 @@ function toggleFriendlyFire() {
   btn.classList.toggle('active', friendlyFire);
   broadcastLobby();
 }
+function toggleSolidBombs() {
+  solidBombs = !solidBombs;
+  const btn = document.getElementById('btn-solidbombs');
+  btn.textContent = solidBombs ? '💣 BOMBS: SOLID' : '💣 BOMBS: PASS-THROUGH';
+  btn.classList.toggle('active', solidBombs);
+  broadcastLobby();
+}
 
 function toggleTeamMode() {
   teamMode = !teamMode;
   const btn = document.getElementById('btn-teams');
   btn.textContent = teamMode ? '🤝 TEAMS (2v2v...)' : '⚔️ FREE FOR ALL';
-  btn.classList.toggle('active', teamMode);
+  btn.classList.add('active');
   reassignSlots();
   renderLobbyList();
   broadcastLobby();
@@ -963,7 +972,7 @@ function handleHostReceive(peerId, data) {
     reassignSlots();
     renderLobbyList();
     broadcastLobby();
-    clientConns[peerId]?.send({ type:'JOINED', slot: lobbyPlayers.findIndex(p=>p.peerId===peerId), players: lobbyPlayers, mode: selectedMode, powerupToggles, friendlyFire, teamMode });
+    clientConns[peerId]?.send({ type:'JOINED', slot: lobbyPlayers.findIndex(p=>p.peerId===peerId), players: lobbyPlayers, mode: selectedMode, powerupToggles, friendlyFire, teamMode, solidBombs });
     return;
   }
   if (data.type === 'INPUT') {
@@ -990,7 +999,7 @@ function reassignSlots() {
 }
 
 function broadcastLobby() {
-  const msg = { type:'LOBBY_UPDATE', players: lobbyPlayers, mode: selectedMode, powerupToggles, friendlyFire, teamMode };
+  const msg = { type:'LOBBY_UPDATE', players: lobbyPlayers, mode: selectedMode, powerupToggles, friendlyFire, teamMode, solidBombs };
   Object.values(clientConns).forEach(c => c.send(msg));
 }
 
@@ -1033,7 +1042,7 @@ function hostStartGame() {
   if (!isHost) return;
   gameMode = selectedMode;
   initGameState();
-  const msg = { type:'GAME_START', grid: serializeGrid(), players, bombs:[], explosions:[], powerups:[], mode: gameMode, teamMode, friendlyFire, powerupToggles };
+  const msg = { type:'GAME_START', grid: serializeGrid(), players, bombs:[], explosions:[], powerups:[], mode: gameMode, teamMode, friendlyFire, solidBombs, powerupToggles };
   Object.values(clientConns).forEach(c => c.send(msg));
   launchGame();
 }
@@ -1050,7 +1059,7 @@ function broadcastState() {
       blastRadius:p.blastRadius, maxBombs:p.maxBombs, kills:p.kills,
       isBot:p.isBot||false,
     })),
-    bombs: bombs.map(b => ({r:b.r,c:b.c,owner:b.owner,timer:b.timer,maxTimer:b.maxTimer,radius:b.radius,pulse:b.pulse||0})),
+    bombs: bombs.map(b => ({r:b.r,c:b.c,owner:b.owner,timer:b.timer,maxTimer:b.maxTimer,radius:b.radius,pulse:b.pulse||0,passthrough:b.passthrough||{}})),
     explosions: explosions.map(e => ({cells:e.cells,timer:e.timer,maxTimer:e.maxTimer})),
     powerups: powerups.map(pu => ({r:pu.r,c:pu.c,type:pu.type,id:pu.id})),
     gridChanges: pendingGridChanges,
@@ -1123,12 +1132,14 @@ function handleClientReceive(data) {
     gameMode = data.mode || 'classic';
     if (data.powerupToggles) powerupToggles = data.powerupToggles;
     if (data.friendlyFire !== undefined) friendlyFire = data.friendlyFire;
+    if (data.solidBombs !== undefined) solidBombs = data.solidBombs;
     if (data.teamMode !== undefined) teamMode = data.teamMode;
     renderLobbyList();
     const mi = document.getElementById('join-mode-info');
     const parts = [(data.mode||'CLASSIC').toUpperCase()];
     if (teamMode) parts.push('TEAMS');
     if (friendlyFire) parts.push('FRIENDLY FIRE');
+    if (solidBombs) parts.push('SOLID BOMBS');
     if (mi) mi.textContent = parts.join(' · ');
     return;
   }
@@ -1137,6 +1148,7 @@ function handleClientReceive(data) {
     gameMode = data.mode || 'classic';
     if (data.powerupToggles) powerupToggles = data.powerupToggles;
     if (data.friendlyFire !== undefined) friendlyFire = data.friendlyFire;
+    if (data.solidBombs !== undefined) solidBombs = data.solidBombs;
     if (data.teamMode !== undefined) teamMode = data.teamMode;
     mySlot = lobbyPlayers.findIndex(p => p.peerId === peer.id);
     renderLobbyList();
@@ -1150,6 +1162,7 @@ function handleClientReceive(data) {
     gameMode = data.mode || 'classic';
     if (data.teamMode !== undefined) teamMode = data.teamMode;
     if (data.friendlyFire !== undefined) friendlyFire = data.friendlyFire;
+    if (data.solidBombs !== undefined) solidBombs = data.solidBombs;
     if (data.powerupToggles) powerupToggles = data.powerupToggles;
     launchGame();
     return;
@@ -1844,6 +1857,7 @@ function bfsPath(sr, sc, er, ec) {
       const key=`${nr},${nc}`;
       if (visited.has(key)) continue;
       if (!grid[nr]||grid[nr][nc]===1||grid[nr][nc]===2) continue;
+      if (solidBombs && bombs.some(b=>b.r===nr&&b.c===nc)) continue;
       visited.add(key);
       const newPath=[...cur.path,{r:nr,c:nc}];
       if (nr===er && nc===ec) return newPath;
@@ -1857,6 +1871,7 @@ function bfsPath(sr, sc, er, ec) {
 // HOST SIMULATION
 // ═══════════════════════════════════════════════════════════════════════════════
 function startSimulation() {
+  clearInterval(simInterval);
   lastSim = performance.now();
   simInterval = setInterval(simTick, TICK_MS);
 }
@@ -1932,6 +1947,9 @@ function simPlayer(p, dt) {
         p.gridR = p.targetR;
         p.gridC = p.targetC;
 
+        // Clear bomb passthrough - player left the bomb tile
+        if(solidBombs) bombs.forEach(b=>{ if(b.passthrough && b.passthrough[p.id] && (b.r!==p.gridR||b.c!==p.gridC)) delete b.passthrough[p.id]; });
+
         // Immediately pick next tile from input
         let dr=0, dc=0;
         if(inp.up) dr=-1; else if(inp.down) dr=1;
@@ -1943,7 +1961,7 @@ function simPlayer(p, dt) {
           else if(dr<0) p.dir='up'; else if(dr>0) p.dir='down';
           const nr = p.gridR + dr;
           const nc = p.gridC + dc;
-          if(canMoveToTile(nr, nc, p.ghostTimer>0)) {
+          if(canMoveToTile(nr, nc, p.ghostTimer>0, p.id)) {
             p.targetR = nr;
             p.targetC = nc;
             // Continue moving with leftover budget (loop again)
@@ -2020,11 +2038,15 @@ function simPlayer(p, dt) {
   }
 }
 
-function canMoveToTile(r, c, ghosted) {
+function canMoveToTile(r, c, ghosted, playerId) {
   if(!grid[r]) return false;
-  if(r===0||r===ROWS-1||c===0||c===COLS-1) return false; // outer boundary always blocks
-  if(ghosted) return true; // ghost can pass through everything else
+  if(r===0||r===ROWS-1||c===0||c===COLS-1) return false;
+  if(ghosted) return true;
   if(grid[r][c]===1 || grid[r][c]===2) return false;
+  if(solidBombs) {
+    const bomb = bombs.find(b=>b.r===r&&b.c===c);
+    if(bomb && !(bomb.passthrough && bomb.passthrough[playerId])) return false;
+  }
   return true;
 }
 
@@ -2053,13 +2075,18 @@ function getCell(x,y){ return {r:Math.floor(y/CELL),c:Math.floor(x/CELL)}; }
 function dropBomb(p){
   const r = p.gridR, c = p.gridC;
   if(!grid[r]) return;
-  // Can only place bombs on open tiles (not inside walls, even if ghosted)
   if(grid[r][c]!==0 && p.ghostTimer<=0) return;
-  if(grid[r][c]===1 || grid[r][c]===2) return; // never place bombs inside walls
+  if(grid[r][c]===1 || grid[r][c]===2) return;
   if(bombs.some(b=>b.r===r&&b.c===c)) return;
   p.activeBombs++;
   p.bombCooldown=300;
-  bombs.push({r,c,owner:p.id,timer:BOMB_TIMER_MS,maxTimer:BOMB_TIMER_MS,radius:p.blastRadius,pulse:0});
+  const bomb = {r,c,owner:p.id,timer:BOMB_TIMER_MS,maxTimer:BOMB_TIMER_MS,radius:p.blastRadius,pulse:0,passthrough:{}};
+  // All players currently on this tile can pass through until they leave
+  players.forEach(pl=>{
+    if(!pl.alive) return;
+    if(pl.gridR===r && pl.gridC===c) bomb.passthrough[pl.id]=true;
+  });
+  bombs.push(bomb);
 }
 
 function simBombs(dt){
@@ -2070,7 +2097,7 @@ function simBombs(dt){
 }
 
 function explodeBomb(bomb){
-  const owner=players[bomb.owner];
+  const owner=players.find(p=>p.id===bomb.owner);
   if(owner) owner.activeBombs=Math.max(0,owner.activeBombs-1);
 
   const cells=[{r:bomb.r,c:bomb.c}];
@@ -2096,7 +2123,7 @@ function explodeBomb(bomb){
 function simExplosions(dt){ explosions.forEach(e=>e.timer-=dt); explosions=explosions.filter(e=>e.timer>0); }
 
 let puIdCounter=0;
-const POWERUP_WEIGHTS = { BLAST:10, BOMB:10, SPEED:10, SHIELD:8, GHOST:4, LIFE:2 };
+const POWERUP_WEIGHTS = { BLAST:10, BOMB:10, SPEED:10, SHIELD:8, GHOST:4, SHOVEL:6, LIFE:2 };
 
 function spawnPowerupAt(r,c){
   if(powerups.some(p=>p.r===r&&p.c===c)) return;
@@ -2151,7 +2178,7 @@ function hitPlayer(p, ownerSlot){
   if(p.shield){ p.shield=false; p.invincible=1000; return; }
   p.lives--;
   p.invincible=2500;
-  const owner=ownerSlot!==undefined?players[ownerSlot]:null;
+  const owner=ownerSlot!==undefined?players.find(p=>p.id===ownerSlot):null;
   if(p.lives<=0){
     p.alive=false;
     if(owner&&owner.id!==p.id){ owner.kills=(owner.kills||0)+1; }
@@ -2409,9 +2436,9 @@ function doRematch(){
   if(!isHost) return;
   document.getElementById('overlay').classList.remove('visible');
   initGameState();
-  const msg={type:'GAME_START',grid:serializeGrid(),players,bombs:[],explosions:[],powerups:[],mode:gameMode,teamMode,friendlyFire,powerupToggles};
+  const msg={type:'GAME_START',grid:serializeGrid(),players,bombs:[],explosions:[],powerups:[],mode:gameMode,teamMode,friendlyFire,solidBombs,powerupToggles};
   Object.values(clientConns).forEach(c=>c.send(msg));
-  bombs=[];explosions=[];gameOver=false;
+  gameOver=false;
   broadcastCountdown(3);
   countdownThen(3,()=>{ gameRunning=true; startSimulation(); });
   updateHUD();
@@ -2442,11 +2469,13 @@ function quitGame(){
   isHost=false; mySlot=-1; lobbyPlayers=[];
   botCount=0; aiStates={};
   powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, SHOVEL:true, LIFE:true };
-  friendlyFire = true; teamMode = false;
+  friendlyFire = true; teamMode = false; solidBombs = true;
   const ffBtn=document.getElementById('btn-ff');
   if(ffBtn){ffBtn.textContent='🔥 FRIENDLY FIRE: ON';ffBtn.classList.add('active');}
+  const sbBtn=document.getElementById('btn-solidbombs');
+  if(sbBtn){sbBtn.textContent='💣 BOMBS: SOLID';sbBtn.classList.add('active');}
   const tmBtn=document.getElementById('btn-teams');
-  if(tmBtn){tmBtn.textContent='⚔️ FREE FOR ALL';tmBtn.classList.remove('active');}
+  if(tmBtn){tmBtn.textContent='⚔️ FREE FOR ALL';tmBtn.classList.add('active');}
   POWERUP_KEYS.forEach(k => { const el=document.getElementById('pu-'+k); if(el) el.classList.add('active'); });
   document.getElementById('bot-count-display').textContent='0';
   document.getElementById('host-info').style.display='none';
@@ -2540,6 +2569,9 @@ function clientPredictMe(p,dt){
       p.gridR = p.targetR;
       p.gridC = p.targetC;
 
+      // Clear bomb passthrough on client side too
+      if(solidBombs) bombs.forEach(b=>{ if(b.passthrough && b.passthrough[mySlot] && (b.r!==p.gridR||b.c!==p.gridC)) delete b.passthrough[mySlot]; });
+
       let dr=0, dc=0;
       if(inp.up) dr=-1; else if(inp.down) dr=1;
       if(inp.left) dc=-1; else if(inp.right) dc=1;
@@ -2569,6 +2601,10 @@ function canMoveToTilePredicted(r, c, ghosted) {
   if(r===0||r===ROWS-1||c===0||c===COLS-1) return false;
   if(ghosted) return true;
   if(grid[r][c]===1 || grid[r][c]===2) return false;
+  if(solidBombs) {
+    const bomb = bombs.find(b=>b.r===r&&b.c===c);
+    if(bomb && !(bomb.passthrough && bomb.passthrough[mySlot])) return false;
+  }
   return true;
 }
 
