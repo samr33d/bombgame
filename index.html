@@ -2139,9 +2139,9 @@ function simPlayer(p, dt) {
   // Check power-up collection
   const {r,c}=getCell(p.x,p.y);
 
-  // Defuse: remove bombs on contact
+  // Defuse: remove enemy bombs on contact
   if(p.defuseTimer>0) {
-    const bi = bombs.findIndex(b=>b.r===r&&b.c===c);
+    const bi = bombs.findIndex(b=>b.r===r&&b.c===c&&b.owner!==p.id);
     if(bi!==-1) {
       const defused = bombs[bi];
       const bowner = players.find(pl=>pl.id===defused.owner);
