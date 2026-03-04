@@ -1159,15 +1159,26 @@ function handleClientReceive(data) {
       const lp = players.find(p=>p.id===sp.id);
       if (!lp) return;
       lp.isBot = sp.isBot||false;
-      lp.gridR=sp.gridR; lp.gridC=sp.gridC;
-      lp.targetR=sp.targetR; lp.targetC=sp.targetC;
       if (sp.id === mySlot) {
+        // Don't overwrite grid/target — client prediction owns those
+        // Only do gentle correction if too far from host position
+        const hostX = sp.x || (sp.targetC*CELL+CELL/2);
+        const hostY = sp.y || (sp.targetR*CELL+CELL/2);
+        const drift = Math.abs(lp.x-hostX)+Math.abs(lp.y-hostY);
+        if (drift > CELL*3) {
+          // Snap to host position if way off
+          lp.x=hostX; lp.y=hostY;
+          lp.gridR=sp.gridR; lp.gridC=sp.gridC;
+          lp.targetR=sp.targetR; lp.targetC=sp.targetC;
+        }
         lp.alive=sp.alive; lp.lives=sp.lives; lp.invincible=sp.invincible?800:0;
         lp.shield=sp.shield; lp.frozen=sp.frozen?500:0;
         lp.speedBoost=sp.speedBoost||0; lp.ghostTimer=sp.ghostTimer||0; lp.shovelTimer=sp.shovelTimer||0;
         lp.blastRadius=sp.blastRadius; lp.maxBombs=sp.maxBombs;
         lp.kills=sp.kills||0;
       } else {
+        lp.gridR=sp.gridR; lp.gridC=sp.gridC;
+        lp.targetR=sp.targetR; lp.targetC=sp.targetC;
         lp.x = lerp(lp.x, sp.x, 0.45);
         lp.y = lerp(lp.y, sp.y, 0.45);
         lp.alive=sp.alive; lp.lives=sp.lives; lp.dir=sp.dir;
@@ -2666,16 +2677,24 @@ function render(dt){
     const px2=pu.c*CELL+CELL/2, py2=pu.r*CELL+CELL/2;
     const bob=Math.sin(now2*0.003+(pu.bob||0))*3;
     const info=POWER_UP_TYPES[pu.type];
+    if(!info) return;
+    const py3=py2+bob;
     ctx.save();
     ctx.shadowColor=info.color; ctx.shadowBlur=14;
     ctx.globalAlpha=0.9;
     // Glow ring
     ctx.strokeStyle=info.color; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.arc(px2,py2+bob,CELL*0.32,0,Math.PI*2); ctx.stroke();
-    // Icon
-    ctx.font=`${CELL*0.5}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
+    ctx.beginPath(); ctx.arc(px2,py3,CELL*0.32,0,Math.PI*2); ctx.stroke();
+    // Filled background
+    ctx.fillStyle=info.color; ctx.globalAlpha=0.2;
+    ctx.beginPath(); ctx.arc(px2,py3,CELL*0.28,0,Math.PI*2); ctx.fill();
+    // Label
+    ctx.globalAlpha=1;
+    ctx.fillStyle=info.color;
+    ctx.font=`bold ${CELL*0.28}px "Geist Mono",monospace`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(info.icon,px2,py2+bob);
+    const shortLabel = {BLAST:'FIR',BOMB:'BMB',SPEED:'SPD',SHIELD:'SHL',GHOST:'GHO',SHOVEL:'AXE',LIFE:'+HP',FREEZE:'FRZ'}[pu.type]||'?';
+    ctx.fillText(shortLabel,px2,py3);
     ctx.restore();
   });
 
@@ -2792,9 +2811,9 @@ function render(dt){
 
     // Crown for me
     if(p.id===mySlot){
-      ctx.fillStyle=p.color; ctx.font=`${CELL*0.38}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
+      ctx.fillStyle=p.color; ctx.font=`bold ${CELL*0.3}px "Geist Mono",monospace`;
       ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText('★',px,py-s*1.22);
+      ctx.fillText('*',px,py-s*1.22);
     }
 
     // Speed boost trail
