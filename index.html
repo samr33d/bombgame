@@ -78,6 +78,7 @@ header {
   display: inline-flex; align-items: center; white-space: nowrap;
   min-width: 52px; justify-content: center;
 }
+.ping-display:empty { display: none; }
 .ping-display.good { color: var(--green); border-color: var(--green); }
 .ping-display.ok { color: var(--gold); border-color: var(--gold); }
 .ping-display.bad { color: var(--accent); border-color: var(--accent); }
@@ -398,7 +399,7 @@ header {
     <div class="header-right">
       <button class="status-badge" id="notes-toggle" onclick="toggleNotes()">📋 NOTES</button>
       <button class="status-badge" id="music-toggle" onclick="toggleMusic()" title="Toggle music">🔊 MUSIC</button>
-      <div class="ping-display" id="ping-display" style="display:none"></div>
+      <div class="ping-display" id="ping-display"></div>
       <div class="status-badge" id="net-status">OFFLINE</div>
     </div>
   </div>
@@ -824,9 +825,23 @@ function initPeer(onOpen) {
   const id = isHost ? genRoomCode() : undefined;
   peer = new Peer(id, { debug: 0 });
   peer.on('open', pid => { roomCode = pid; setStatus(true); onOpen(pid); });
+  peer.on('disconnected', () => {
+    // Lost connection to signaling server — try to reconnect
+    if (peer && !peer.destroyed) {
+      try { peer.reconnect(); } catch(e) {}
+    }
+  });
   peer.on('error', err => {
-    showErr('host-err', 'Connection error: ' + err.type);
-    showErr('join-err', 'Could not connect — check the room code');
+    if (err.type === 'peer-unavailable') {
+      showErr('join-err', 'Room not found — check the code');
+    } else if (err.type === 'unavailable-id') {
+      showErr('host-err', 'Room code conflict — try again');
+    } else if (err.type === 'network' || err.type === 'server-error') {
+      // Network issue — don't show scary error, peer will try to reconnect
+    } else {
+      if (isHost) showErr('host-err', 'Connection error: ' + err.type);
+      else showErr('join-err', 'Connection error: ' + err.type);
+    }
   });
 }
 
@@ -847,7 +862,6 @@ function updatePingDisplay(ms) {
   currentPing = ms;
   const el = document.getElementById('ping-display');
   if (!el) return;
-  el.style.display = '';
   el.textContent = ms + 'ms';
   el.className = 'ping-display ' + (ms < 80 ? 'good' : ms < 200 ? 'ok' : 'bad');
 }
@@ -874,7 +888,10 @@ function hostGame() {
     peer.on('connection', conn => {
       conn.on('open', () => handleClientConnect(conn));
       conn.on('data', data => handleHostReceive(conn.peer, data));
-      conn.on('close', () => handleClientDisconnect(conn.peer));
+      conn.on('close', () => {
+        // Only handle disconnect if this conn is still the active one for this peer
+        if (clientConns[conn.peer] === conn) handleClientDisconnect(conn.peer);
+      });
       conn.on('error', e => console.error('conn err', e));
     });
   });
@@ -888,19 +905,22 @@ function handleClientConnect(conn) {
     setTimeout(() => conn.close(), 500);
     return;
   }
-  // Reject duplicate connections from same peer
-  if (clientConns[conn.peer] || lobbyPlayers.some(p => p.peerId === conn.peer)) {
-    conn.send({ type:'REJECTED', reason:'Already connected' });
-    setTimeout(() => conn.close(), 500);
-    return;
-  }
-  if (lobbyPlayers.length >= MAX_PLAYERS) {
+  if (lobbyPlayers.length >= MAX_PLAYERS && !clientConns[conn.peer]) {
     conn.send({ type:'REJECTED', reason:'Room is full (8/8)' });
     setTimeout(() => conn.close(), 500);
     return;
   }
+  // If this peer already has a connection, replace it (PeerJS can re-negotiate)
+  if (clientConns[conn.peer]) {
+    try { clientConns[conn.peer].close(); } catch(e) {}
+  }
   clientConns[conn.peer] = conn;
-  conn.send({ type:'NEED_INFO' });
+  // If already in lobby, re-send lobby state instead of NEED_INFO
+  if (lobbyPlayers.some(p => p.peerId === conn.peer)) {
+    broadcastLobby();
+  } else {
+    conn.send({ type:'NEED_INFO' });
+  }
 }
 
 function handleClientDisconnect(peerId) {
@@ -1061,8 +1081,13 @@ function joinGame() {
       startPingLoop();
     });
     hostConn.on('data', data => handleClientReceive(data));
-    hostConn.on('error', () => showErr('join-err', 'Could not connect to room'));
-    hostConn.on('close', () => { setStatus(false); if(!gameRunning && !gameOver) showErr('join-err', 'Disconnected from host'); });
+    hostConn.on('error', (e) => { if(!gameRunning && !gameOver) showErr('join-err', 'Connection error'); });
+    hostConn.on('close', () => {
+      setStatus(false);
+      if (!gameRunning && !gameOver && !peer?.destroyed) {
+        showErr('join-err', 'Disconnected from host');
+      }
+    });
   });
 }
 
@@ -2413,7 +2438,7 @@ function quitGame(){
   document.getElementById('join-info').style.display='none';
   clearErr('host-err'); clearErr('join-err');
   setStatus(false);
-  var pingEl=document.getElementById('ping-display');pingEl.textContent='';pingEl.style.display='none';
+  document.getElementById('ping-display').textContent='';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
