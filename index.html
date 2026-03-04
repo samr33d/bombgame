@@ -433,15 +433,15 @@ header {
     <div class="note-entry">
       <div class="note-version">v1.6 — LATEST</div>
       <div class="note-items">
-        Fixed players unable to join after host quit a previous game (gameOver not reset on new room)<br>
-        Fixed client rubber banding: removed aggressive position correction (tileDrift > 3 snap)<br>
-        Client prediction now fully authoritative — position only overridden on respawn, ghost eject, or catastrophic desync (>15 tiles)<br>
-        Fixed inputInterval not surviving quit+rejoin (clients couldn't send input after reconnect)<br>
+        Fixed players unable to join after host quit a previous game (gameOver not reset)<br>
+        Fixed client desync: replaced hard position snap with soft reconciliation (15% nudge per tick)<br>
+        Hard snap only on teleport events (respawn, ghost eject) or catastrophic desync (>8 tiles)<br>
+        Input send rate increased to 60hz with delta detection (only sends on change + keepalive)<br>
+        Added shovel prediction to client — clients can walk into destructible walls with shovel active<br>
+        Fixed inputInterval surviving quit+rejoin (was being destroyed and never recreated)<br>
         All players use same simPlayer at 60hz — eliminated dual movement system<br>
-        Base player speed: 3.0<br>
-        Network broadcasts throttled to 20hz<br>
-        Code optimization: in-place array compaction, cached DOM refs, throttled HUD<br>
-        Removed dead code + fixed listener leaks
+        Base player speed: 3.0, network broadcasts at 20hz<br>
+        Code optimization: in-place array compaction, cached DOM refs, throttled HUD
       </div>
     </div>
 
@@ -1275,19 +1275,36 @@ function handleClientReceive(data) {
       if (!lp) return;
       lp.isBot = sp.isBot||false;
       if (sp.id === mySlot) {
-        // Client prediction is fully authoritative for own position.
-        // Only override position for explicit teleport events:
+        // Client prediction is authoritative for own position.
+        // Soft reconciliation: gradually correct drift, hard snap only for teleports.
         const justRespawned = !lp.alive && sp.alive;
         const deathAnimEnded = lp.deathAnim > 0 && (sp.deathAnim||0) <= 0;
-        const catastrophicDesync = Math.abs((sp.gridR||0)-(lp.gridR||0)) + Math.abs((sp.gridC||0)-(lp.gridC||0)) > 15;
-        // Detect ghost/shovel eject: timer just expired on host and our position differs
         const ghostEject = lp.ghostTimer > 0 && (sp.ghostTimer||0) <= 0 && ((sp.gridR||0)!==(lp.gridR||0) || (sp.gridC||0)!==(lp.gridC||0));
-        if (justRespawned || deathAnimEnded || catastrophicDesync || ghostEject) {
+
+        if (justRespawned || deathAnimEnded || ghostEject) {
+          // Teleport event — hard snap to host position
           const hostX = sp.x || (sp.targetC*CELL+CELL/2);
           const hostY = sp.y || (sp.targetR*CELL+CELL/2);
           lp.x=hostX; lp.y=hostY;
           lp.gridR=sp.gridR; lp.gridC=sp.gridC;
           lp.targetR=sp.targetR; lp.targetC=sp.targetC;
+        } else if (sp.alive && lp.alive && (sp.deathAnim||0) <= 0) {
+          // Soft reconciliation: compare host vs client pixel position
+          const hostX = sp.x || (sp.targetC*CELL+CELL/2);
+          const hostY = sp.y || (sp.targetR*CELL+CELL/2);
+          const driftX = hostX - lp.x;
+          const driftY = hostY - lp.y;
+          const driftDist = Math.abs(driftX) + Math.abs(driftY);
+          if (driftDist > CELL * 8) {
+            // Catastrophic desync — hard snap
+            lp.x=hostX; lp.y=hostY;
+            lp.gridR=sp.gridR; lp.gridC=sp.gridC;
+            lp.targetR=sp.targetR; lp.targetC=sp.targetC;
+          } else if (driftDist > CELL * 0.5) {
+            // Gentle correction: nudge 15% toward host each update (~20hz)
+            lp.x += driftX * 0.15;
+            lp.y += driftY * 0.15;
+          }
         }
         // Always sync non-position state from host
         lp.alive=sp.alive; lp.lives=sp.lives; lp.invincible=sp.invincible?800:0;
@@ -1743,6 +1760,7 @@ function buildMyInput() {
   return { up, down, left, right, bomb };
 }
 
+let _lastSentInput = null;
 let inputInterval = setInterval(() => {
   if (!gameRunning) return;
   const inp = buildMyInput();
@@ -1750,9 +1768,14 @@ let inputInterval = setInterval(() => {
     inputStates[mySlot] = inp;
     if (inp.bomb) pendingBombs.add(mySlot);
   } else if (hostConn?.open) {
-    hostConn.send({ type:'INPUT', input:inp });
+    // Send immediately if input changed, or every 3rd tick (~48ms) as keepalive
+    const changed = !_lastSentInput || inp.up!==_lastSentInput.up || inp.down!==_lastSentInput.down || inp.left!==_lastSentInput.left || inp.right!==_lastSentInput.right || inp.bomb!==_lastSentInput.bomb;
+    if (changed || !_lastSentInput?._tick || ++_lastSentInput._tick >= 3) {
+      hostConn.send({ type:'INPUT', input:inp });
+      _lastSentInput = {...inp, _tick:0};
+    }
   }
-}, 50);
+}, 16);
 
 // ── TOUCH CONTROLS ──
 let touchSetupDone = false;
@@ -3052,6 +3075,12 @@ function clientPredictMe(p,dt){
         const nr = p.gridR + dr;
         const nc = p.gridC + dc;
         if(canMoveToTile(nr, nc, p.ghostTimer>0, mySlot)) {
+          p.targetR = nr;
+          p.targetC = nc;
+          continue;
+        }
+        // Shovel: treat destructible walls as walkable (host will break them)
+        if(p.shovelTimer>0 && grid[nr] && grid[nr][nc]===2) {
           p.targetR = nr;
           p.targetC = nc;
           continue;
