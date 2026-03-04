@@ -1255,34 +1255,26 @@ function generateMap() {
   // Generate symmetrical pillar patterns (4-way mirror symmetry)
   const innerR = ROWS-2, innerC = COLS-2;
   const halfR = Math.ceil(innerR/2), halfC = Math.ceil(innerC/2);
-  const midR = Math.floor(ROWS/2), midC = Math.floor(COLS/2);
 
-  // Choose a random pattern style
-  const patterns = [
-    'grid',      // sparse grid with gaps
-    'diamond',   // diamond shapes
-    'cross',     // cross/plus patterns
-    'scatter',   // random but mirrored
-    'rings',     // concentric rings
-  ];
+  const patterns = ['grid','diamond','cross','scatter','rings'];
   const pattern = patterns[Math.floor(Math.random()*patterns.length)];
 
   // Build candidate pillars in top-left quadrant, then mirror
   const candidates = new Set();
 
   if (pattern === 'grid') {
-    // Sparse grid: every 3rd or 4th cell
-    const spacing = 3 + Math.floor(Math.random()*2); // 3 or 4
-    for (let r=spacing; r<halfR; r+=spacing) {
-      for (let c=spacing; c<halfC; c+=spacing) {
+    // Dense grid: every 2nd or 3rd cell
+    const spacing = 2 + Math.floor(Math.random()*2); // 2 or 3
+    for (let r=2; r<halfR; r+=spacing) {
+      for (let c=2; c<halfC; c+=spacing) {
         candidates.add(`${r},${c}`);
       }
     }
   } else if (pattern === 'diamond') {
-    // Diamond shapes at intervals
-    const spacing = 4 + Math.floor(Math.random()*2);
-    for (let r=3; r<halfR; r+=spacing) {
-      for (let c=3; c<halfC; c+=spacing) {
+    // Diamond shapes at tighter intervals
+    const spacing = 3 + Math.floor(Math.random()*2); // 3 or 4
+    for (let r=2; r<halfR; r+=spacing) {
+      for (let c=2; c<halfC; c+=spacing) {
         candidates.add(`${r},${c}`);
         if(r-1>=1) candidates.add(`${r-1},${c}`);
         if(r+1<halfR) candidates.add(`${r+1},${c}`);
@@ -1291,10 +1283,10 @@ function generateMap() {
       }
     }
   } else if (pattern === 'cross') {
-    // Cross patterns spaced out
-    const spacing = 5 + Math.floor(Math.random()*2);
-    for (let r=3; r<halfR; r+=spacing) {
-      for (let c=3; c<halfC; c+=spacing) {
+    // Cross patterns with tighter spacing
+    const spacing = 3 + Math.floor(Math.random()*2); // 3 or 4
+    for (let r=2; r<halfR; r+=spacing) {
+      for (let c=2; c<halfC; c+=spacing) {
         candidates.add(`${r},${c}`);
         for (let i=1;i<=1;i++) {
           if(r-i>=1) candidates.add(`${r-i},${c}`);
@@ -1305,37 +1297,37 @@ function generateMap() {
       }
     }
   } else if (pattern === 'scatter') {
-    // Random scattered but mirrored
-    const count = Math.floor(halfR * halfC * 0.06);
+    // Dense random scatter but mirrored
+    const count = Math.floor(halfR * halfC * 0.18);
     for (let i=0; i<count; i++) {
       const r = 2 + Math.floor(Math.random()*(halfR-2));
       const c = 2 + Math.floor(Math.random()*(halfC-2));
       candidates.add(`${r},${c}`);
     }
   } else if (pattern === 'rings') {
-    // Concentric rectangles
-    for (let ring=3; ring<Math.min(halfR,halfC); ring+=4) {
-      for (let r=ring; r<=ring+1 && r<halfR; r++) {
-        candidates.add(`${r},${ring}`);
-      }
-      for (let c=ring; c<=ring+1 && c<halfC; c++) {
+    // Concentric rectangles with more detail
+    for (let ring=2; ring<Math.min(halfR,halfC); ring+=2) {
+      // Top edge of ring
+      for (let c=ring; c<halfC; c+=2) {
         candidates.add(`${ring},${c}`);
+      }
+      // Left edge of ring
+      for (let r=ring; r<halfR; r+=2) {
+        candidates.add(`${r},${ring}`);
       }
     }
   }
 
-  // Mirror candidates to all 4 quadrants and place pillars
+  // Mirror candidates to all 4 quadrants
   const pillarSet = new Set();
   candidates.forEach(key => {
     const [lr,lc] = key.split(',').map(Number);
-    // 4-way mirror positions (in grid coordinates, offset by 1 for border)
     const positions = [
       [lr+1, lc+1],
       [lr+1, COLS-1-lc-1],
       [ROWS-1-lr-1, lc+1],
       [ROWS-1-lr-1, COLS-1-lc-1],
     ];
-    // Also mirror along center axes for odd dimensions
     positions.forEach(([pr,pc]) => {
       if(pr>=1 && pr<ROWS-1 && pc>=1 && pc<COLS-1) {
         pillarSet.add(`${pr},${pc}`);
@@ -1344,26 +1336,18 @@ function generateMap() {
   });
 
   // Filter: no adjacent pillars
-  const finalPillars = [];
   const placed = new Set();
-  const sortedPillars = [...pillarSet].sort(); // deterministic order
+  const sortedPillars = [...pillarSet].sort();
   for (const key of sortedPillars) {
     const [r,c] = key.split(',').map(Number);
-    // Check no adjacent pillar already placed
     let hasAdj = false;
     for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
       if (placed.has(`${r+dr},${c+dc}`)) { hasAdj=true; break; }
     }
-    if (!hasAdj) {
-      placed.add(key);
-      finalPillars.push({r,c});
-    }
+    if (!hasAdj) placed.add(key);
   }
 
-  // Place pillars
-  finalPillars.forEach(({r,c}) => { grid[r][c]=1; });
-
-  // Place destructible walls (avoid spawns and pillars)
+  // Place pillars (skip spawn zones)
   const spawnCells = new Set();
   getSpawnPositions().forEach(({r,c}) => {
     [[-1,-1],[-1,0],[-1,1],[0,-1],[0,0],[0,1],[1,-1],[1,0],[1,1],
@@ -1372,6 +1356,13 @@ function generateMap() {
       if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS) spawnCells.add(`${nr},${nc}`);
     });
   });
+
+  placed.forEach(key => {
+    const [r,c] = key.split(',').map(Number);
+    if (!spawnCells.has(key)) grid[r][c]=1;
+  });
+
+  // Place destructible walls
   for (let r=1;r<ROWS-1;r++) {
     for (let c=1;c<COLS-1;c++) {
       if (grid[r][c]===0 && !spawnCells.has(`${r},${c}`) && Math.random()<0.38) {
@@ -2181,10 +2172,17 @@ function canMoveToTile(r, c, ghosted, playerId) {
   if(solidBombs) {
     const bomb = bombs.find(b=>b.r===r&&b.c===c);
     if(bomb && !(bomb.passthrough && bomb.passthrough[playerId])) {
-      // Defuse players can walk onto bombs
       const pl = players.find(p=>p.id===playerId);
       if(!pl || !pl.defuseTimer || pl.defuseTimer<=0) return false;
     }
+  }
+  // Player collision: can't move into a tile occupied by another player
+  for (const other of players) {
+    if (!other.alive || other.id === playerId) continue;
+    if (other.ghostTimer > 0) continue; // ghosted players don't block
+    if (other.gridR === r && other.gridC === c) return false;
+    // Also block if other player is moving toward this tile
+    if (other.targetR === r && other.targetC === c) return false;
   }
   return true;
 }
@@ -2330,7 +2328,12 @@ function hitPlayer(p, ownerSlot){
     explosions.push({cells:[{r:Math.floor(p.y/CELL),c:Math.floor(p.x/CELL)}],timer:500,maxTimer:500,owner:ownerSlot});
   } else {
     const spawns=getSpawnPositions();
-    const sp=spawns[p.id%spawns.length];
+    // Find a spawn not occupied by another player
+    let sp = spawns[p.id%spawns.length];
+    for (const candidate of spawns) {
+      const occupied = players.some(other => other.alive && other.id!==p.id && other.gridR===candidate.r && other.gridC===candidate.c);
+      if (!occupied) { sp = candidate; break; }
+    }
     p.x=sp.c*CELL+CELL/2; p.y=sp.r*CELL+CELL/2;
     p.gridR=sp.r; p.gridC=sp.c; p.targetR=sp.r; p.targetC=sp.c;
     spawnParticles(p.x,p.y,p.color,8);
@@ -2748,6 +2751,13 @@ function canMoveToTilePredicted(r, c, ghosted) {
       const me = players.find(p=>p.id===mySlot);
       if(!me || !me.defuseTimer || me.defuseTimer<=0) return false;
     }
+  }
+  // Player collision prediction
+  for (const other of players) {
+    if (!other.alive || other.id === mySlot) continue;
+    if (other.ghostTimer > 0) continue;
+    if (other.gridR === r && other.gridC === c) return false;
+    if (other.targetR === r && other.targetC === c) return false;
   }
   return true;
 }
