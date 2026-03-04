@@ -288,6 +288,44 @@ header {
 }
 @keyframes popupFloat { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-50px)} }
 
+/* ── FREEZE OVERLAY ── */
+.freeze-overlay {
+  position: fixed; inset: 0; z-index: 500; pointer-events: none;
+  display: flex; align-items: center; justify-content: center; flex-direction: column;
+}
+.freeze-overlay .freeze-flash {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, rgba(100,180,255,0.35) 0%, rgba(50,120,220,0.15) 40%, transparent 70%);
+  animation: freezeFlash 0.6s ease-out forwards;
+}
+@keyframes freezeFlash { 0%{opacity:0;transform:scale(0.3)} 30%{opacity:1;transform:scale(1.1)} 100%{opacity:0;transform:scale(1.5)} }
+.freeze-overlay .freeze-border {
+  position: absolute; inset: 0;
+  border: 6px solid rgba(100,200,255,0.5);
+  box-shadow: inset 0 0 80px rgba(100,180,255,0.3), inset 0 0 200px rgba(50,120,220,0.15);
+  animation: freezeBorder 4s ease-out forwards;
+  border-radius: 4px;
+}
+@keyframes freezeBorder { 0%{opacity:1;border-width:6px} 70%{opacity:0.6;border-width:3px} 100%{opacity:0;border-width:0px} }
+.freeze-overlay .freeze-text {
+  position: relative; z-index: 1;
+  font-family: 'Geist Mono', monospace; font-weight: 700;
+  font-size: clamp(1rem, 4vw, 2rem); letter-spacing: 6px;
+  color: #88ccff; text-shadow: 0 0 20px rgba(100,180,255,0.8), 0 0 60px rgba(50,120,220,0.4);
+  animation: freezeTextIn 0.5s ease-out, freezeTextOut 0.8s ease-in 2.5s forwards;
+}
+@keyframes freezeTextIn { 0%{opacity:0;transform:scale(1.8)} 100%{opacity:1;transform:scale(1)} }
+@keyframes freezeTextOut { to{opacity:0;transform:translateY(-20px)} }
+.freeze-overlay .freeze-particles {
+  position: absolute; inset: 0; overflow: hidden;
+}
+.freeze-particle {
+  position: absolute; width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(180,220,255,0.8); box-shadow: 0 0 6px rgba(100,180,255,0.6);
+  animation: freezeParticleFall linear forwards;
+}
+@keyframes freezeParticleFall { 0%{opacity:1;transform:translateY(0) rotate(0deg)} 100%{opacity:0;transform:translateY(100vh) rotate(360deg)} }
+
 /* ── TOUCH CONTROLS ── */
 #touch-controls {
   display: none;
@@ -410,7 +448,27 @@ header {
     <div class="notes-title">📋 RELEASE NOTES</div>
 
     <div class="note-entry">
-      <div class="note-version">v1.2 — LATEST</div>
+      <div class="note-version">v1.4 — LATEST</div>
+      <div class="note-items">
+        ❄️ Freeze power-up restored with full-screen ice animation<br>
+        Frozen players encased in visible ice block with crystal sparkles<br>
+        Freeze announcement shows who froze you (or that you froze everyone)<br>
+        Falling ice particles and glowing border during 4s freeze duration
+      </div>
+    </div>
+
+    <div class="note-entry">
+      <div class="note-version">v1.3</div>
+      <div class="note-items">
+        Removed Blitz and Open game modes (Classic & Survival only)<br>
+        Power-up labels now use initials (B.R, S.B, F.B, etc.)<br>
+        Base player speed reduced for tighter control<br>
+        Music now triggers directly on START GAME click
+      </div>
+    </div>
+
+    <div class="note-entry">
+      <div class="note-version">v1.2</div>
       <div class="note-items">
         Fire-destroyed blocks now drop power-ups at normal rates<br>
         Music engine rewritten — handles browser autoplay policies with retry/resume<br>
@@ -498,7 +556,7 @@ header {
     <div class="note-entry">
       <div class="note-version">v0.4 — GAME MODES</div>
       <div class="note-items">
-        Three modes: Classic (3 lives), Survival (1 life), Blitz (90s timer)<br>
+        Three modes: Classic (3 lives), Survival (1 life)<br>
         AI bots with easy/medium/hard difficulty<br>
         Kill feed and scoreboard<br>
         LotR-themed player and bot names
@@ -548,12 +606,6 @@ header {
           <button class="mode-btn" onclick="setMode('survival')" id="mode-survival">
             <span class="mode-icon">💀</span>SURVIVAL
           </button>
-          <button class="mode-btn" onclick="setMode('blitz')" id="mode-blitz">
-            <span class="mode-icon">⚡</span>BLITZ
-          </button>
-          <button class="mode-btn" onclick="setMode('open')" id="mode-open">
-            <span class="mode-icon">🏟️</span>OPEN
-          </button>
         </div>
         <div class="mode-desc" id="mode-desc">Classic: 3 lives, standard map, power-ups enabled</div>
       </div>
@@ -580,6 +632,7 @@ header {
           <button class="mode-btn active" onclick="togglePowerup('BOMB')" id="pu-BOMB">💣 BOMB</button>
           <button class="mode-btn active" onclick="togglePowerup('SPEED')" id="pu-SPEED">👟 SPEED</button>
           <button class="mode-btn active" onclick="togglePowerup('SHIELD')" id="pu-SHIELD">🛡️ SHIELD</button>
+          <button class="mode-btn active" onclick="togglePowerup('FREEZE')" id="pu-FREEZE">❄️ FREEZE</button>
           <button class="mode-btn active" onclick="togglePowerup('GHOST')" id="pu-GHOST">👻 GHOST</button>
           <button class="mode-btn active" onclick="togglePowerup('SHOVEL')" id="pu-SHOVEL">⛏️ PICK AXE</button>
           <button class="mode-btn active" onclick="togglePowerup('DEFUSE')" id="pu-DEFUSE">🔧 DEFUSE</button>
@@ -641,7 +694,7 @@ header {
     <div class="info-card">
       <div class="info-card-title">POWER-UPS</div>
       <div class="info-card-body">
-        🔥 Bigger blast<br>💣 More bombs<br>👟 Speed up (permanent)<br>🛡️ Shield (1 hit)<br>👻 Ghost (10s, pass walls)<br>⛏️ Pick axe (10s, break walls)<br>🔧 Defuse (10s, disarm bombs)<br>🔥 Fire bomb (next bomb spreads fire)<br>💎 Extra life (rare)
+        🔥 Bigger blast<br>💣 More bombs<br>👟 Speed up (permanent)<br>🛡️ Shield (1 hit)<br>❄️ Freeze (4s, freeze others)<br>👻 Ghost (10s, pass walls)<br>⛏️ Pick axe (10s, break walls)<br>🔧 Defuse (10s, disarm bombs)<br>🔥 Fire bomb (next bomb spreads fire)<br>💎 Extra life (rare)
       </div>
     </div>
     <div class="info-card">
@@ -653,7 +706,7 @@ header {
     <div class="info-card">
       <div class="info-card-title">MODES</div>
       <div class="info-card-body">
-        💣 Classic: 3 lives<br>💀 Survival: 1 life<br>⚡ Blitz: 90s timer<br>🏟️ Open: No obstacles
+        💣 Classic: 3 lives<br>💀 Survival: 1 life
       </div>
     </div>
   </div>
@@ -705,13 +758,12 @@ const ROWS = 19;
 const DEFAULT_BOMB_RADIUS = 3;
 const BOMB_TIMER_MS = 2800;
 const EXPLOSION_DURATION = 400;
-const PLAYER_SPEED = 2.6;
+const PLAYER_SPEED = 2.1;
 const MAX_PLAYERS = 8;
 const TICK_MS = 33;
 const PING_INTERVAL = 2000;
 
-// Blitz mode timer
-const BLITZ_TIME = 90000;
+
 
 // AI difficulty configs
 const AI_DIFFICULTY = {
@@ -733,6 +785,7 @@ const POWER_UP_TYPES = {
   BOMB:   { icon:'💣', color:'#ffcc00', label:'+1 BOMB' },
   SPEED:  { icon:'👟', color:'#44ff88', label:'SPEED UP' },
   SHIELD: { icon:'🛡️', color:'#00e5ff', label:'SHIELD' },
+  FREEZE: { icon:'❄️', color:'#88ccff', label:'FREEZE ALL' },
   GHOST:  { icon:'👻', color:'#bb88ff', label:'GHOST MODE' },
   SHOVEL: { icon:'⛏️', color:'#cc8844', label:'PICK AXE' },
   DEFUSE: { icon:'🔧', color:'#66ddaa', label:'DEFUSE' },
@@ -752,7 +805,7 @@ let clientConns = {};
 let roomCode = null;
 let lobbyPlayers = [];
 let selectedMode = 'classic';
-let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, SHOVEL:true, DEFUSE:true, FIREBOMB:true, LIFE:true };
+let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, FREEZE:true, GHOST:true, SHOVEL:true, DEFUSE:true, FIREBOMB:true, LIFE:true };
 let friendlyFire = true; // self-damage from own bombs
 let teamMode = false; // false = FFA, true = 2 teams
 let solidBombs = true; // false = pass through, true = bombs block movement
@@ -766,7 +819,7 @@ let particles = [];
 let gameRunning = false;
 let gameOver = false;
 let gameMode = 'classic';
-let blitzTimer = BLITZ_TIME;
+
 
 let inputStates = {};
 let pendingBombs = new Set();
@@ -796,12 +849,10 @@ const touchKeys = { up: false, down: false, left: false, right: false, bomb: fal
 const modeDescs = {
   classic:  'Classic: 3 lives, standard map, power-ups enabled',
   survival: 'Survival: 1 life — one hit and you\'re out!',
-  blitz:    'Blitz: 90 second countdown — most kills wins!',
-  open:     'Open: No obstacles — nowhere to hide!'
 };
 function setMode(m) {
   selectedMode = m;
-  ['classic','survival','blitz','open'].forEach(k => {
+  ['classic','survival'].forEach(k => {
     document.getElementById('mode-'+k).classList.toggle('active', k===m);
   });
   document.getElementById('mode-desc').textContent = modeDescs[m];
@@ -1080,7 +1131,7 @@ function renderLobbyList() {
 
 function hostStartGame() {
   if (!isHost) return;
-  try{Music.warmUp();}catch(e){}
+  try{Music.playGame();}catch(e){console.warn('Music error:',e);}
   gameMode = selectedMode;
   initGameState();
   const msg = { type:'GAME_START', grid: serializeGrid(), players, bombs:[], explosions:[], powerups:[], mode: gameMode, teamMode, friendlyFire, solidBombs, powerupToggles };
@@ -1106,7 +1157,6 @@ function broadcastState() {
     gridChanges: pendingGridChanges,
     freeze: freezeAll,
     fires: pendingFires.map(f=>({r:f.r,c:f.c,timer:f.timer,owner:f.owner})),
-    blitzTimer: gameMode==='blitz' ? blitzTimer : undefined,
   };
   pendingGridChanges = [];
   Object.values(clientConns).forEach(c => c.send(msg));
@@ -1254,9 +1304,7 @@ function handleClientReceive(data) {
     if (data.gridChanges) data.gridChanges.forEach(({r,c,v}) => { if(grid[r]) grid[r][c]=v; });
     freezeAll = data.freeze || false;
     if(data.fires) pendingFires = data.fires;
-    if (data.blitzTimer !== undefined) blitzTimer = data.blitzTimer;
     updateHUD();
-    updateRoundTimer();
     return;
   }
   if (data.type === 'GAME_OVER') {
@@ -1270,6 +1318,10 @@ function handleClientReceive(data) {
   }
   if (data.type === 'KILL_FEED') {
     addKillFeed(data.msg, data.color);
+    return;
+  }
+  if (data.type === 'FREEZE_EFFECT') {
+    showFreezeAnimation(data.by, data.color, -1);
     return;
   }
   if (data.type === 'POWERUP_POPUP') {
@@ -1292,7 +1344,6 @@ function generateMap() {
       grid[r][c]=0;
     }
   }
-  if (gameMode==='open') return;
 
   // Generate symmetrical pillar patterns (4-way mirror symmetry)
   const innerR = ROWS-2, innerC = COLS-2;
@@ -1564,7 +1615,6 @@ function initGameState() {
 
   bombs=[]; explosions=[]; particles=[]; powerups=[];
   gameOver=false; freezeAll=false; freezeTimer=0;
-  blitzTimer = BLITZ_TIME;
   pendingGridChanges=[]; pendingFires=[];
   Object.keys(inputStates).forEach(k => inputStates[k]=blankInput());
   pendingBombs.clear();
@@ -1596,7 +1646,8 @@ function launchGame() {
     gameRunning=true;
     if (isHost) startSimulation();
     startRendering();
-    try{Music.warmUp();Music.playGame();}catch(e){console.warn('Music.playGame error:',e);}
+    // Client: try starting music — will work if user has interacted with page
+    if(!isHost) { try{Music.playGame();}catch(e){} }
   });
 
   updateHUD();
@@ -2113,12 +2164,6 @@ function simTick() {
   const dt = Math.min(now - lastSim, 100);
   lastSim = now;
 
-  // Blitz timer
-  if (gameMode==='blitz') {
-    blitzTimer -= dt;
-    if (blitzTimer <= 0) { blitzTimer=0; endBlitz(); return; }
-  }
-
   // Freeze global
   if (freezeTimer > 0) {
     freezeTimer -= dt;
@@ -2137,7 +2182,6 @@ function simTick() {
   spawnPowerups();
   checkWin();
   updateHUD();
-  updateRoundTimer();
   broadcastState();
 }
 
@@ -2459,7 +2503,7 @@ function simFires(dt) {
 }
 
 let puIdCounter=0;
-const POWERUP_WEIGHTS = { BLAST:10, BOMB:10, SPEED:10, SHIELD:8, GHOST:4, SHOVEL:6, DEFUSE:5, FIREBOMB:3, LIFE:2 };
+const POWERUP_WEIGHTS = { BLAST:10, BOMB:10, SPEED:10, SHIELD:8, FREEZE:3, GHOST:4, SHOVEL:6, DEFUSE:5, FIREBOMB:3, LIFE:2 };
 
 function spawnPowerupAt(r,c){
   if(powerups.some(p=>p.r===r&&p.c===c)) return;
@@ -2503,6 +2547,14 @@ function collectPowerup(p, idx){
     case 'BOMB':   p.maxBombs=Math.min(p.maxBombs+1,5); break;
     case 'SPEED':  p.speedBoost=Math.min((p.speedBoost||0)+1, 4); break;
     case 'SHIELD': p.shield=true; break;
+    case 'FREEZE':
+      freezeAll=true; freezeTimer=4000;
+      players.forEach(pl=>{ if(pl.id!==p.id&&pl.alive) pl.frozen=4000; });
+      // Broadcast freeze event for animation
+      const freezeMsg = {type:'FREEZE_EFFECT', by:p.name, color:p.color};
+      Object.values(clientConns).forEach(cn=>cn.send(freezeMsg));
+      showFreezeAnimation(p.name, p.color, p.id);
+      break;
     case 'GHOST':  p.ghostTimer=10000; p.shovelTimer=0; break;
     case 'SHOVEL': p.shovelTimer=10000; p.ghostTimer=0; break;
     case 'DEFUSE': p.defuseTimer=10000; break;
@@ -2536,28 +2588,6 @@ function hitPlayer(p, ownerSlot){
   updateHUD();
 }
 
-function endBlitz(){
-  if(gameOver) return;
-  gameOver=true; gameRunning=false;
-  clearInterval(simInterval);
-  const scoreboard=buildScoreboard();
-  let wMsg=null;
-  if(teamMode){
-    // Sum kills by team
-    const teamKills=[0,0];
-    players.forEach(p=>{ teamKills[getPlayerTeam(p.id)]+=(p.kills||0); });
-    const winTeam=teamKills[0]>=teamKills[1]?0:1;
-    wMsg={name:'TEAM '+TEAM_NAMES[winTeam],color:TEAM_COLORS[winTeam]};
-  } else {
-    let maxKills=-1, winner=null;
-    players.forEach(p=>{ if((p.kills||0)>maxKills){ maxKills=p.kills||0; winner=p; } });
-    wMsg=winner?{name:winner.name,color:winner.color}:null;
-  }
-  setTimeout(()=>{
-    Object.values(clientConns).forEach(c=>c.send({type:'GAME_OVER',winner:wMsg,scoreboard}));
-    showGameOver(wMsg,scoreboard);
-  },500);
-}
 
 function checkWin(){
   const alive=players.filter(p=>p.alive);
@@ -2653,18 +2683,8 @@ function updateHUD(){
       ${p.defuseTimer>0?`<span class="hud-powerup">🔧${Math.ceil(p.defuseTimer/1000)}s</span>`:''}
       ${p.fireTimer>0?`<span class="hud-powerup">🔥${Math.ceil(p.fireTimer/1000)}s</span>`:''}
       <span class="hud-lives">${'♥'.repeat(Math.max(0,p.lives))}</span>
-      ${gameMode==='blitz'?`<span style="color:var(--text-dim);font-size:0.72rem;margin-left:2px">×${p.kills||0}</span>`:''}
     </div>`;
   }).join('');
-}
-
-function updateRoundTimer(){
-  const el=document.getElementById('round-timer');
-  if(!el) return;
-  if(gameMode!=='blitz'){ el.textContent=''; return; }
-  const s=Math.ceil(blitzTimer/1000);
-  el.textContent=`⏱ ${s}s`;
-  el.className='round-timer'+(s<=10?' urgent':'');
 }
 
 function addKillFeed(msg,color){
@@ -2693,6 +2713,58 @@ function showPowerupPopup(x,y,type){
   div.textContent=`${pu.icon} ${pu.label}`;
   wrap.appendChild(div);
   setTimeout(()=>div.remove(),1600);
+}
+
+function showFreezeAnimation(byName, byColor, byId) {
+  // Remove any existing freeze overlay
+  document.querySelectorAll('.freeze-overlay').forEach(el=>el.remove());
+
+  const overlay = document.createElement('div');
+  overlay.className = 'freeze-overlay';
+
+  // Central flash
+  const flash = document.createElement('div');
+  flash.className = 'freeze-flash';
+  overlay.appendChild(flash);
+
+  // Icy border that persists during freeze
+  const border = document.createElement('div');
+  border.className = 'freeze-border';
+  overlay.appendChild(border);
+
+  // Falling ice particles
+  const particleWrap = document.createElement('div');
+  particleWrap.className = 'freeze-particles';
+  for(let i=0; i<30; i++) {
+    const p = document.createElement('div');
+    p.className = 'freeze-particle';
+    p.style.left = Math.random()*100 + '%';
+    p.style.top = (Math.random()*-20) + '%';
+    p.style.width = (3 + Math.random()*6) + 'px';
+    p.style.height = p.style.width;
+    p.style.animationDuration = (1.5 + Math.random()*2.5) + 's';
+    p.style.animationDelay = (Math.random()*1) + 's';
+    p.style.opacity = 0.4 + Math.random()*0.6;
+    particleWrap.appendChild(p);
+  }
+  overlay.appendChild(particleWrap);
+
+  // Text announcement
+  const isMe = (byId === mySlot);
+  const text = document.createElement('div');
+  text.className = 'freeze-text';
+  text.innerHTML = isMe
+    ? '❄️ YOU FROZE EVERYONE ❄️'
+    : `❄️ <span style="color:${byColor}">${byName}</span> FROZE YOU ❄️`;
+  overlay.appendChild(text);
+
+  document.body.appendChild(overlay);
+
+  // Kill feed
+  addKillFeed(`${byName} FROZE ALL PLAYERS`, '#88ccff');
+
+  // Remove after freeze duration
+  setTimeout(()=>{ if(overlay.parentNode) overlay.remove(); }, 4200);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2808,7 +2880,7 @@ function quitGame(){
   if(peer){peer.destroy();peer=null;}
   isHost=false; mySlot=-1; lobbyPlayers=[];
   botCount=0; aiStates={};
-  powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, SHOVEL:true, DEFUSE:true, FIREBOMB:true, LIFE:true };
+  powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, FREEZE:true, GHOST:true, SHOVEL:true, DEFUSE:true, FIREBOMB:true, LIFE:true };
   friendlyFire = true; teamMode = false; solidBombs = true;
   const ffBtn=document.getElementById('btn-ff');
   if(ffBtn){ffBtn.textContent='🔥 FRIENDLY FIRE: ON';ffBtn.classList.add('active');}
@@ -2866,7 +2938,6 @@ function renderLoop(ts){
 
   updateCamera(dt);
   render(dt);
-  if(gameMode==='blitz') updateRoundTimer();
 }
 
 // Host visual interpolation — smoothly moves the player's render position
@@ -3098,7 +3169,7 @@ function render(dt){
     ctx.fillStyle=info.color;
     ctx.font=`bold ${CELL*0.28}px "Geist Mono",monospace`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    const shortLabel = {BLAST:'FIR',BOMB:'BMB',SPEED:'SPD',SHIELD:'SHL',GHOST:'GHO',SHOVEL:'AXE',DEFUSE:'DEF',FIREBOMB:'F.B',LIFE:'+HP',FREEZE:'FRZ'}[pu.type]||'?';
+    const shortLabel = {BLAST:'B.R',BOMB:'+B',SPEED:'S.B',SHIELD:'S.H',GHOST:'G.M',SHOVEL:'P.A',DEFUSE:'D.F',FIREBOMB:'F.B',LIFE:'+L',FREEZE:'F.Z'}[pu.type]||'?';
     ctx.fillText(shortLabel,px2,py3);
     ctx.restore();
   });
@@ -3183,7 +3254,21 @@ function render(dt){
     ctx.save();
 
     // Freeze tint
-    if(p.frozen>0){ ctx.fillStyle='rgba(100,200,255,0.3)'; ctx.fillRect(px-s*0.8,py-s*1.2,s*1.6,s*2); }
+    if(p.frozen>0){
+      // Ice block around player
+      ctx.fillStyle='rgba(80,160,255,0.25)';
+      ctx.fillRect(px-s*0.9,py-s*1.3,s*1.8,s*2.2);
+      ctx.strokeStyle='rgba(140,210,255,0.6)'; ctx.lineWidth=2;
+      ctx.strokeRect(px-s*0.9,py-s*1.3,s*1.8,s*2.2);
+      // Ice crystal sparkles
+      ctx.fillStyle='rgba(200,230,255,0.7)';
+      const sparkT = performance.now()*0.005;
+      for(let i=0;i<4;i++){
+        const sx = px + Math.cos(sparkT+i*1.57)*s*0.6;
+        const sy = py - s*0.3 + Math.sin(sparkT*0.7+i*2)*s*0.5;
+        ctx.beginPath(); ctx.arc(sx,sy,2,0,Math.PI*2); ctx.fill();
+      }
+    }
 
     // Ghost effect — semi-transparent with purple glow
     if(p.ghostTimer>0){
@@ -3326,82 +3411,59 @@ document.addEventListener('touchend',e=>{
 // CHIPTUNE MUSIC ENGINE
 var Music=(function(){
 var actx=null,playing=null,nodes=[],ltimers=[],mg=null,VOL=0.04,muted=false;
-var _pendingPlay=null;
+var _started=false;
 
-function getCtx(){
-  if(!actx || actx.state==='closed') {
-    actx=new(window.AudioContext||window.webkitAudioContext)();
-    mg=actx.createGain();
-    mg.gain.value=muted?0:VOL;
-    mg.connect(actx.destination);
-  }
+function mkCtx(){
+  if(actx && actx.state!=='closed') return actx;
+  actx=new(window.AudioContext||window.webkitAudioContext)();
+  mg=actx.createGain();
+  mg.gain.value=muted?0:VOL;
+  mg.connect(actx.destination);
   return actx;
 }
 
-function tryResume(){
-  if(!actx) return;
-  if(actx.state==='suspended'){
-    actx.resume().then(function(){
-      // If we had a pending play, fire it now
-      if(_pendingPlay){
-        var fn=_pendingPlay;
-        _pendingPlay=null;
-        fn();
-      }
-    }).catch(function(){});
-  }
-}
-
-// Global interaction listeners — resume audio on any user interaction
-var resumeListenerAdded=false;
-function addResumeListener(){
-  if(resumeListenerAdded) return;
-  resumeListenerAdded=true;
-  var handler=function(){
-    tryResume();
-  };
-  document.addEventListener('click',handler,{capture:true,passive:true});
-  document.addEventListener('touchstart',handler,{capture:true,passive:true});
-  document.addEventListener('keydown',handler,{capture:true,passive:true});
-}
-
 function stop(){
-  _pendingPlay=null;
   ltimers.forEach(function(id){clearTimeout(id)});ltimers=[];
   nodes.forEach(function(n){try{n.stop()}catch(e){}try{n.disconnect()}catch(e){}});
-  nodes=[];playing=null;
+  nodes=[];playing=null;_started=false;
 }
 
 function NT(nm,oc){var s={C:0,"C#":1,D:2,"D#":3,E:4,F:5,"F#":6,G:7,"G#":8,A:9,"A#":10,B:11};return 440*Math.pow(2,(s[nm]+(oc-4)*12-9)/12);}
 
 function os(type,freq,start,dur,vol,det){
   if(!actx||actx.state==='closed') return;
-  var o=actx.createOscillator(),g=actx.createGain();
-  o.type=type;o.frequency.value=freq;if(det)o.detune.value=det;
-  g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(vol||0.3,start+0.01);
-  g.gain.setValueAtTime(vol||0.3,start+dur-0.03);g.gain.linearRampToValueAtTime(0,start+dur);
-  o.connect(g);g.connect(mg);o.start(start);o.stop(start+dur+0.05);nodes.push(o,g);
+  try{
+    var o=actx.createOscillator(),g=actx.createGain();
+    o.type=type;o.frequency.value=freq;if(det)o.detune.value=det;
+    g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(vol||0.3,start+0.01);
+    g.gain.setValueAtTime(vol||0.3,start+dur-0.03);g.gain.linearRampToValueAtTime(0,start+dur);
+    o.connect(g);g.connect(mg);o.start(start);o.stop(start+dur+0.05);nodes.push(o,g);
+  }catch(e){}
 }
 
 function nz(start,dur,vol){
   if(!actx||actx.state==='closed') return;
-  var len=Math.max(1,actx.sampleRate*dur|0);var buf=actx.createBuffer(1,len,actx.sampleRate);
-  var d=buf.getChannelData(0);for(var i=0;i<d.length;i++)d[i]=Math.random()*2-1;
-  var src=actx.createBufferSource();src.buffer=buf;var g=actx.createGain();
-  var f=actx.createBiquadFilter();f.type="highpass";f.frequency.value=6000;
-  g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(vol||0.05,start+0.005);
-  g.gain.setValueAtTime(vol||0.05,start+dur*0.7);g.gain.linearRampToValueAtTime(0,start+dur);
-  src.connect(f);f.connect(g);g.connect(mg);src.start(start);src.stop(start+dur+0.05);nodes.push(src,g,f);
+  try{
+    var len=Math.max(1,actx.sampleRate*dur|0);var buf=actx.createBuffer(1,len,actx.sampleRate);
+    var d=buf.getChannelData(0);for(var i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+    var src=actx.createBufferSource();src.buffer=buf;var g=actx.createGain();
+    var f=actx.createBiquadFilter();f.type="highpass";f.frequency.value=6000;
+    g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(vol||0.05,start+0.005);
+    g.gain.setValueAtTime(vol||0.05,start+dur*0.7);g.gain.linearRampToValueAtTime(0,start+dur);
+    src.connect(f);f.connect(g);g.connect(mg);src.start(start);src.stop(start+dur+0.05);nodes.push(src,g,f);
+  }catch(e){}
 }
 
-function doPlayGame(){
-  // Clean up old nodes
-  nodes=nodes.filter(function(n){try{if(n.playbackState===3||n.context.state==='closed')return false}catch(e){}return true});
-  playing="game";
+function playGame(){
+  stop();mkCtx();
+  if(actx.state==='suspended') actx.resume();
+  playing="game";_started=true;
   var BPM=150,beat=60/BPM,bar=beat*4,loopLen=bar*8;
   function sched(){
     if(playing!=="game"||!actx||actx.state==='closed')return;
-    if(actx.state==='suspended'){tryResume();ltimers.push(setTimeout(sched,200));return;}
+    if(actx.state==='suspended'){actx.resume();ltimers.push(setTimeout(sched,200));return;}
+    // Trim dead nodes
+    if(nodes.length>500) nodes.splice(0,nodes.length-100);
     var now=actx.currentTime+0.05;
     var bass="AAAAAAAAAAAAAAAAFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDDDEEEEEEEEEEEEEEEE".split("");
     bass.forEach(function(n,i){var t=now+i*(beat/2);os("sawtooth",NT(n,2),t,beat/2-0.02,i%4===0?0.35:0.2);});
@@ -3415,53 +3477,22 @@ function doPlayGame(){
   sched();
 }
 
-function playGame(){
-  stop();
-  getCtx();
-  if(actx.state==='running'){
-    doPlayGame();
-  } else {
-    // Context suspended — queue playback for when it resumes
-    _pendingPlay=doPlayGame;
-    tryResume();
-    // Also retry in a moment in case resume works with a delay
-    ltimers.push(setTimeout(function(){
-      if(_pendingPlay && actx && actx.state==='running'){
-        var fn=_pendingPlay;_pendingPlay=null;fn();
-      }
-    },300));
-    ltimers.push(setTimeout(function(){
-      if(_pendingPlay && actx && actx.state==='running'){
-        var fn=_pendingPlay;_pendingPlay=null;fn();
-      }
-    },1000));
-  }
-}
-
 function playVictory(){
-  stop();
-  getCtx();
-  function doVictory(){
-    playing="victory";
-    var now=actx.currentTime+0.05,BPM=140,beat=60/BPM;
-    var fan=[["C",5,.5],["E",5,.5],["G",5,.5],["C",6,1],["B",5,.25],["C",6,.25],["B",5,.25],["C",6,.75],["G",5,.5],["E",5,.5],["G",5,.5],["C",6,1.5]];
-    var t=0;fan.forEach(function(m){var st=now+t*beat;os("square",NT(m[0],m[1]),st,m[2]*beat-0.02,0.15,4);os("triangle",NT(m[0],m[1]-1),st,m[2]*beat-0.02,0.08);t+=m[2];});
-    [[0,"C",3,1],[2,"G",2,1],[3,"C",3,.5],[3.5,"E",3,.5],[4,"C",3,2]].forEach(function(b){os("sawtooth",NT(b[1],b[2]),now+b[0]*beat,b[3]*beat-0.02,0.2);});
-    for(var i=0;i<4;i++)nz(now+i*beat,0.06,0.08);nz(now+4*beat,0.4,0.1);
-    ["C","E","G","C","E","G","C","E"].forEach(function(n,i){os("triangle",NT(n,4+Math.floor(i/3)),now+(5+i*0.12)*beat,0.3,0.07);});
-  }
-  if(actx.state==='running'){
-    doVictory();
-  } else {
-    _pendingPlay=doVictory;
-    tryResume();
-  }
+  stop();mkCtx();
+  if(actx.state==='suspended') actx.resume();
+  playing="victory";
+  var now=actx.currentTime+0.05,BPM=140,beat=60/BPM;
+  var fan=[["C",5,.5],["E",5,.5],["G",5,.5],["C",6,1],["B",5,.25],["C",6,.25],["B",5,.25],["C",6,.75],["G",5,.5],["E",5,.5],["G",5,.5],["C",6,1.5]];
+  var t=0;fan.forEach(function(m){var st=now+t*beat;os("square",NT(m[0],m[1]),st,m[2]*beat-0.02,0.15,4);os("triangle",NT(m[0],m[1]-1),st,m[2]*beat-0.02,0.08);t+=m[2];});
+  [[0,"C",3,1],[2,"G",2,1],[3,"C",3,.5],[3.5,"E",3,.5],[4,"C",3,2]].forEach(function(b){os("sawtooth",NT(b[1],b[2]),now+b[0]*beat,b[3]*beat-0.02,0.2);});
+  for(var i=0;i<4;i++)nz(now+i*beat,0.06,0.08);nz(now+4*beat,0.4,0.1);
+  ["C","E","G","C","E","G","C","E"].forEach(function(n,i){os("triangle",NT(n,4+Math.floor(i/3)),now+(5+i*0.12)*beat,0.3,0.07);});
 }
 
 function toggleMute(){muted=!muted;if(mg)mg.gain.value=muted?0:VOL;return muted;}
-function warmUp(){getCtx();tryResume();addResumeListener();}
+function warmUp(){mkCtx();if(actx.state==='suspended')actx.resume();}
 function init(){}
-return{playGame:playGame,playVictory:playVictory,stop:stop,init:init,toggleMute:toggleMute,warmUp:warmUp};
+return{playGame:playGame,playVictory:playVictory,stop:stop,init:init,toggleMute:toggleMute,warmUp:warmUp,_started:_started};
 })();
 </script>
 </body>
