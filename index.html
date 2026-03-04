@@ -433,13 +433,14 @@ header {
     <div class="note-entry">
       <div class="note-version">v1.6 — LATEST</div>
       <div class="note-items">
-        Fixed host player slower than bots — removed dual movement system, all players use same simPlayer<br>
-        Sim tick rate: 60hz (was 30hz) for smooth host movement; network broadcasts throttled to 20hz<br>
+        Fixed client rubber banding: removed aggressive position correction (tileDrift > 3 snap)<br>
+        Client prediction now fully authoritative — position only overridden on respawn, ghost eject, or catastrophic desync (>15 tiles)<br>
+        Fixed inputInterval not surviving quit+rejoin (clients couldn't send input after reconnect)<br>
+        All players use same simPlayer at 60hz — eliminated dual movement system<br>
         Base player speed: 3.0<br>
-        Code optimization: in-place array removal for particles, bombs, explosions, fires<br>
-        Cached DOM refs — no getElementById in render loop<br>
-        HUD updates throttled to 5/sec<br>
-        Removed dead code + fixed interval/listener leaks on quit
+        Network broadcasts throttled to 20hz<br>
+        Code optimization: in-place array compaction, cached DOM refs, throttled HUD<br>
+        Removed dead code + fixed listener leaks
       </div>
     </div>
 
@@ -1270,18 +1271,14 @@ function handleClientReceive(data) {
       if (!lp) return;
       lp.isBot = sp.isBot||false;
       if (sp.id === mySlot) {
-        // Client prediction owns pixel position entirely
-        // Only correct grid state if tiles diverge significantly
-        const hostGridR = sp.gridR;
-        const hostGridC = sp.gridC;
-        const clientGridR = lp.gridR;
-        const clientGridC = lp.gridC;
-        const tileDrift = Math.abs(hostGridR-clientGridR) + Math.abs(hostGridC-clientGridC);
+        // Client prediction is fully authoritative for own position.
+        // Only override position for explicit teleport events:
         const justRespawned = !lp.alive && sp.alive;
-        // Detect respawn after death anim: we had deathAnim, host no longer does, and tiles differ
-        const deathAnimEnded = lp.deathAnim > 0 && (sp.deathAnim||0) <= 0 && tileDrift > 0;
-        if (tileDrift > 3 || justRespawned || deathAnimEnded) {
-          // Major desync, respawn, or lag spike — hard snap to host
+        const deathAnimEnded = lp.deathAnim > 0 && (sp.deathAnim||0) <= 0;
+        const catastrophicDesync = Math.abs((sp.gridR||0)-(lp.gridR||0)) + Math.abs((sp.gridC||0)-(lp.gridC||0)) > 15;
+        // Detect ghost/shovel eject: timer just expired on host and our position differs
+        const ghostEject = lp.ghostTimer > 0 && (sp.ghostTimer||0) <= 0 && ((sp.gridR||0)!==(lp.gridR||0) || (sp.gridC||0)!==(lp.gridC||0));
+        if (justRespawned || deathAnimEnded || catastrophicDesync || ghostEject) {
           const hostX = sp.x || (sp.targetC*CELL+CELL/2);
           const hostY = sp.y || (sp.targetR*CELL+CELL/2);
           lp.x=hostX; lp.y=hostY;
@@ -2921,7 +2918,6 @@ function quitGame(){
   try{Music.stop();}catch(e){}
   gameRunning=false; gameOver=true;
   clearInterval(simInterval);
-  clearInterval(inputInterval); inputInterval=null;
   cancelAnimationFrame(animFrame);
   clearInterval(pingInterval2);
   window.removeEventListener('keydown',onKey,true);
