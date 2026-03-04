@@ -604,7 +604,7 @@ header {
     <div class="card">
       <div class="card-title">⚡ HOST A GAME</div>
       <div class="field-label">YOUR NAME</div>
-      <input class="text-input" id="host-name" maxlength="8" placeholder="ARAGORN" />
+      <input class="text-input" id="host-name" maxlength="8" placeholder="MASSIMO" />
 
       <div class="card-section">
         <div class="field-label">GAME MODE</div>
@@ -680,7 +680,7 @@ header {
     <div class="card">
       <div class="card-title">🔗 JOIN A GAME</div>
       <div class="field-label">YOUR NAME</div>
-      <input class="text-input" id="join-name" maxlength="8" placeholder="LEGOLAS" />
+      <input class="text-input" id="join-name" maxlength="8" placeholder="GLASER" />
       <div class="card-section">
         <div class="field-label">ROOM CODE</div>
         <input class="text-input" id="join-code" maxlength="6" placeholder="ABC123" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()" />
@@ -778,10 +778,10 @@ const AI_DIFFICULTY = {
   medium: { reactionMs:250,  bombChance:0.025, fleeRange:5, huntRange:14, trapSkill:0.3, label:'MEDIUM', icon:'🟡' },
   hard:   { reactionMs:80,   bombChance:0.05,  fleeRange:8, huntRange:25, trapSkill:0.7, label:'HARD',   icon:'🔴' },
 };
-const PLAYER_NAMES = ['ARAGORN','LEGOLAS','GIMLI','GANDALF','FRODO','SAM','MERRY','PIPPIN','BOROMIR','FARAMIR','EOWYN','THEODEN','ELROND','ARWEN','TREEBD'];
+const PLAYER_NAMES = ['MASSIMO','SAGMSTR','PAULA','GLASER','CARSON','BRODVCH','RAND','MULLER','EMIGRE','CROUWEL','LUSTIG','BASS','TSCHILD','KALMAN','BRODY'];
 function randomName(){ return PLAYER_NAMES[Math.floor(Math.random()*PLAYER_NAMES.length)]; }
 
-const BOT_NAMES = ['SAURON','GOLLUM','SARUMAN','WORMTNG','LURTZ','GOTHMOG','AZOG','BOLG','SHELOB','UNGOLNT'];
+const BOT_NAMES = ['HELVETA','BAUHAUS','FUTURA','GROTESK','DIDOT','BODONI','UNIVERS','OPTIMA','AVENIR','FRUTGER'];
 let selectedAIDifficulty = 'medium';
 
 const COLORS = ['#ff3c5a','#00e5ff','#aaff44','#ffaa00','#cc44ff','#ff88cc','#44ffcc','#ffff44'];
