@@ -132,8 +132,6 @@ header {
   border: 1px solid var(--border);
   border-radius: 8px; padding: 32px; position: relative;
 }
-.card-glow { display: none; }
-.card::before { display: none; }
 .card-title {
   font-size: 0.85rem; letter-spacing: 3px; margin-bottom: 24px;
   color: var(--cyan); text-transform: uppercase;
@@ -379,25 +377,10 @@ header {
 }
 @keyframes killFeedIn { from{opacity:0;transform:translateX(-16px)} to{opacity:1;transform:translateX(0)} }
 @keyframes killFeedOut { to{opacity:0} }
-
-#round-timer {
-  font-size: 0.9rem; color: var(--text-dim);
-  text-align: center; letter-spacing: 3px; margin: 6px 0; transition: color 0.3s;
-}
-#round-timer.urgent { color: var(--accent); animation: pulse 0.5s ease-in-out infinite; }
-
 .bottom-bar {
   margin-top: 8px; font-size: 0.78rem;
   color: var(--text-muted); text-align: center; letter-spacing: 2px;
 }
-
-.stats-overlay {
-  position: absolute; top: 10px; right: 10px; z-index: 25;
-  background: rgba(0,0,0,0.8); padding: 10px 14px;
-  border: 1px solid var(--border); border-radius: 6px; pointer-events: none;
-  font-size: 0.78rem; color: var(--text-dim); min-width: 100px;
-}
-
 /* ── RESPONSIVE ── */
 @media(max-width: 700px) {
   .lobby-wrap { grid-template-columns: 1fr; }
@@ -448,7 +431,21 @@ header {
     <div class="notes-title">📋 RELEASE NOTES</div>
 
     <div class="note-entry">
-      <div class="note-version">v1.5 — LATEST</div>
+      <div class="note-version">v1.6 — LATEST</div>
+      <div class="note-items">
+        Fixed host player slower than bots (tile transition stall at 30hz boundary — now handled at 60hz)<br>
+        Base player speed: 2.8 (was 2.4)<br>
+        Code optimization: in-place array removal for particles, bombs, explosions, fires<br>
+        Cached DOM refs — no getElementById in render loop<br>
+        HUD updates throttled to 5/sec (was 30/sec)<br>
+        STATE message size reduced (rounded floats)<br>
+        Merged duplicate canMoveToTile functions<br>
+        Removed dead code + fixed interval/listener leaks on quit
+      </div>
+    </div>
+
+    <div class="note-entry">
+      <div class="note-version">v1.5</div>
       <div class="note-items">
         Death animation: expanding shockwave ring, spinning body fragments, skull icon on elimination<br>
         Players freeze in place during 1.2s death anim before respawning<br>
@@ -727,7 +724,6 @@ header {
 <!-- GAME SCREEN -->
 <div id="game-screen">
   <div id="hud"></div>
-  <div id="round-timer"></div>
   <div id="canvas-wrap">
     <canvas id="game-canvas"></canvas>
     <div id="overlay">
@@ -770,12 +766,10 @@ const ROWS = 19;
 const DEFAULT_BOMB_RADIUS = 3;
 const BOMB_TIMER_MS = 2800;
 const EXPLOSION_DURATION = 400;
-const PLAYER_SPEED = 2.4;
+const PLAYER_SPEED = 2.8;
 const MAX_PLAYERS = 8;
 const TICK_MS = 33;
 const PING_INTERVAL = 2000;
-
-
 
 // AI difficulty configs
 const AI_DIFFICULTY = {
@@ -831,8 +825,6 @@ let particles = [];
 let gameRunning = false;
 let gameOver = false;
 let gameMode = 'classic';
-
-
 let inputStates = {};
 let pendingBombs = new Set();
 let simInterval = null;
@@ -840,12 +832,12 @@ let botCount = 0; // number of AI bots to add
 let aiStates = {}; // per-bot AI brain state
 let lastSim = 0;
 let pendingGridChanges = [];
-let pendingPowerupChanges = [];
 let pendingFires = []; // fire spread timers: {r,c,timer,owner}
 
 let animFrame = null;
 let viewport = { x: 0, y: 0 };
 let canvas, ctx;
+let canvasWrap = null; // cached DOM ref
 let lastTime2 = 0;
 let lastPingTime = 0;
 let currentPing = 0;
@@ -1143,7 +1135,7 @@ function renderLobbyList() {
 
 function hostStartGame() {
   if (!isHost) return;
-  try{Music.playGame();}catch(e){console.warn('Music error:',e);}
+  try{Music.playGame();}catch(e){}
   gameMode = selectedMode;
   initGameState();
   const msg = { type:'GAME_START', grid: serializeGrid(), players, bombs:[], explosions:[], powerups:[], mode: gameMode, teamMode, friendlyFire, solidBombs, powerupToggles };
@@ -1156,15 +1148,15 @@ function broadcastState() {
   const msg = {
     type: 'STATE',
     players: players.map(p => ({
-      id:p.id, x:p.x, y:p.y, alive:p.alive, lives:p.lives,
+      id:p.id, x:Math.round(p.x*10)/10, y:Math.round(p.y*10)/10, alive:p.alive, lives:p.lives,
       gridR:p.gridR, gridC:p.gridC, targetR:p.targetR, targetC:p.targetC,
       dir:p.dir, walkFrame:p.walkFrame, invincible:p.invincible>0,
       frozen:p.frozen>0, shield:p.shield, speedBoost:p.speedBoost||0, ghostTimer:p.ghostTimer||0, shovelTimer:p.shovelTimer||0, defuseTimer:p.defuseTimer||0, fireTimer:p.fireTimer||0,
       blastRadius:p.blastRadius, maxBombs:p.maxBombs, kills:p.kills,
       isBot:p.isBot||false, deathAnim:p.deathAnim||0, deathX:p.deathX||0, deathY:p.deathY||0,
     })),
-    bombs: bombs.map(b => ({r:b.r,c:b.c,owner:b.owner,timer:b.timer,maxTimer:b.maxTimer,radius:b.radius,pulse:b.pulse||0,passthrough:b.passthrough||{},fire:b.fire||false})),
-    explosions: explosions.map(e => ({cells:e.cells,timer:e.timer,maxTimer:e.maxTimer})),
+    bombs: bombs.map(b => ({r:b.r,c:b.c,owner:b.owner,timer:Math.round(b.timer),maxTimer:b.maxTimer,radius:b.radius,pulse:Math.round((b.pulse||0)*100)/100,passthrough:b.passthrough||{},fire:b.fire||false})),
+    explosions: explosions.map(e => ({cells:e.cells,timer:Math.round(e.timer),maxTimer:e.maxTimer})),
     powerups: powerups.map(pu => ({r:pu.r,c:pu.c,type:pu.type,id:pu.id})),
     gridChanges: pendingGridChanges,
     freeze: freezeAll,
@@ -1650,6 +1642,7 @@ function launchGame() {
   document.body.style.height = '100%';
 
   canvas = document.getElementById('game-canvas');
+  canvasWrap = document.getElementById('canvas-wrap');
   ctx = canvas.getContext('2d');
   canvas.width = COLS*CELL;
   canvas.height = ROWS*CELL;
@@ -1709,7 +1702,9 @@ function setupInput() {
   window.addEventListener('keydown', onKey, true);
   window.addEventListener('keyup', onKeyUp, true);
   window.addEventListener('blur', clearAllKeys);
-  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) clearAllKeys(); });
+  const visHandler = ()=>{ if(document.hidden) clearAllKeys(); };
+  document.addEventListener('visibilitychange', visHandler);
+  window._visHandler = visHandler;
 }
 function onKey(e) {
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
@@ -1785,7 +1780,6 @@ function setupTouchControls() {
 
   // Bomb button
   const bb = document.getElementById('touch-bomb-btn');
-  let bombTap = false;
   const pressBomb = () => { touchKeys.bomb=true; bb.classList.add('pressed'); };
   const relBomb = () => { touchKeys.bomb=false; bb.classList.remove('pressed'); };
   bb.addEventListener('touchstart', pressBomb, {passive:true});
@@ -2207,7 +2201,8 @@ function simTick() {
   simFires(dt);
   spawnPowerups();
   checkWin();
-  updateHUD();
+  // Throttle HUD updates (DOM-heavy) to ~5/sec instead of 30/sec
+  if(!simTick._lastHUD||now-simTick._lastHUD>200){ updateHUD(); simTick._lastHUD=now; }
   broadcastState();
 }
 
@@ -2425,8 +2420,6 @@ function findNearestOpenTile(sr,sc){
 
 function getCell(x,y){ return {r:Math.floor(y/CELL),c:Math.floor(x/CELL)}; }
 
-
-
 function dropBomb(p){
   const r = p.gridR, c = p.gridC;
   if(!grid[r]) return;
@@ -2445,10 +2438,16 @@ function dropBomb(p){
 }
 
 function simBombs(dt){
-  bombs.forEach(b=>{ b.timer-=dt; b.pulse=(b.pulse||0)+dt*0.008; });
-  const exploding=bombs.filter(b=>b.timer<=0);
-  bombs=bombs.filter(b=>b.timer>0);
-  exploding.forEach(b=>explodeBomb(b));
+  const exploding=[];
+  let w=0;
+  for(let i=0;i<bombs.length;i++){
+    const b=bombs[i];
+    b.timer-=dt; b.pulse=(b.pulse||0)+dt*0.008;
+    if(b.timer<=0) exploding.push(b);
+    else bombs[w++]=b;
+  }
+  bombs.length=w;
+  for(let i=0;i<exploding.length;i++) explodeBomb(exploding[i]);
 }
 
 function explodeBomb(bomb){
@@ -2531,28 +2530,33 @@ function spreadFire(seedWalls, ownerId) {
   });
 }
 
-function simExplosions(dt){ explosions.forEach(e=>e.timer-=dt); explosions=explosions.filter(e=>e.timer>0); }
+function simExplosions(dt){
+  let w=0;
+  for(let i=0;i<explosions.length;i++){
+    explosions[i].timer-=dt;
+    if(explosions[i].timer>0) explosions[w++]=explosions[i];
+  }
+  explosions.length=w;
+}
 
 function simFires(dt) {
-  const ready = [];
-  pendingFires.forEach(f => { f.timer -= dt; });
-  // Process fires that are ready
-  pendingFires = pendingFires.filter(f => {
-    if(f.timer <= 0) {
-      // Only destroy if still a destructible wall (might have been destroyed by another explosion)
+  let w=0;
+  for(let i=0;i<pendingFires.length;i++){
+    const f=pendingFires[i];
+    f.timer-=dt;
+    if(f.timer<=0){
       if(grid[f.r] && grid[f.r][f.c] === 2) {
         grid[f.r][f.c] = 0;
         pendingGridChanges.push({r:f.r, c:f.c, v:0});
-        // Fire explosions damage players on these tiles
         explosions.push({cells:[{r:f.r,c:f.c}], timer:300, maxTimer:300, owner:f.owner});
         spawnParticles(f.c*CELL+CELL/2, f.r*CELL+CELL/2, '#ff6600', 6);
-        // Small chance for powerup
         if(Math.random()<0.12) spawnPowerupAt(f.r, f.c);
       }
-      return false; // remove from queue
+    } else {
+      pendingFires[w++]=f;
     }
-    return true; // keep in queue
-  });
+  }
+  pendingFires.length=w;
 }
 
 let puIdCounter=0;
@@ -2649,8 +2653,6 @@ function hitPlayer(p, ownerSlot){
   }
   updateHUD();
 }
-
-
 function checkWin(){
   const alive=players.filter(p=>p.alive);
 
@@ -2717,12 +2719,15 @@ function spawnParticles(x,y,color,count){
 }
 
 function simParticles(dt){
-  particles.forEach(p=>{
+  let writeIdx = 0;
+  for(let i=0; i<particles.length; i++){
+    const p=particles[i];
     p.x+=p.vx*(dt/16); p.y+=p.vy*(dt/16);
     p.vy+=0.15*(dt/16);
     p.life-=(dt/16)*(1/30/p.maxLife);
-  });
-  particles=particles.filter(p=>p.life>0);
+    if(p.life>0) particles[writeIdx++]=p;
+  }
+  particles.length=writeIdx;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2762,7 +2767,7 @@ function addKillFeed(msg,color){
 }
 
 function showPowerupPopup(x,y,type){
-  const wrap=document.getElementById('canvas-wrap');
+  const wrap=canvasWrap;
   if(!wrap) return;
   const pu=POWER_UP_TYPES[type];
   if(!pu) return;
@@ -2870,7 +2875,7 @@ function broadcastCountdown(n){
 }
 
 function showGameOver(winner,scoreboard){
-  try{Music.playVictory();}catch(e){console.warn('Music.playVictory error:',e);}
+  try{Music.playVictory();}catch(e){}
   const overlay=document.getElementById('overlay');
   const content=document.getElementById('overlay-content');
   overlay.classList.add('visible');
@@ -2919,15 +2924,17 @@ function doRematch(){
 }
 
 function quitGame(){
-  try{Music.stop();}catch(e){console.warn('Music.stop error:',e);}
+  try{Music.stop();}catch(e){}
   gameRunning=false; gameOver=true;
   clearInterval(simInterval);
+  clearInterval(inputInterval); inputInterval=null;
   cancelAnimationFrame(animFrame);
   clearInterval(pingInterval2);
   window.removeEventListener('keydown',onKey,true);
   window.removeEventListener('keyup',onKeyUp,true);
   window.removeEventListener('blur',clearAllKeys);
   window.removeEventListener('resize',resizeViewport);
+  if(window._visHandler) { document.removeEventListener('visibilitychange', window._visHandler); window._visHandler=null; }
   clearAllKeys();
   // Unlock body scroll
   document.body.style.overflow = '';
@@ -2971,32 +2978,65 @@ function renderLoop(ts){
   animFrame=requestAnimationFrame(renderLoop);
   const dt=Math.min(ts-lastTime2,50);
   lastTime2=ts;
+  const me=players.find(p=>p.id===mySlot);
 
   // Smooth visual interpolation for players
   if(gameRunning){
     if(isHost) {
       // Host: smooth visual interpolation between 30hz sim ticks
-      const me=players.find(p=>p.id===mySlot);
       if(me&&me.alive&&!me.frozen&&me.deathAnim<=0) {
-        const tx = me.targetC * CELL + CELL/2;
-        const ty = me.targetR * CELL + CELL/2;
-        const dx = tx - me.x;
-        const dy = ty - me.y;
-        const dist = Math.sqrt(dx*dx+dy*dy);
-        if (dist > 0.5) {
-          const spdMult = 1 + (me.speedBoost||0) * 0.06;
-          const spd = PLAYER_SPEED * spdMult * (dt/16);
-          const step = Math.min(spd, dist);
-          me.x += (dx/dist) * step;
-          me.y += (dy/dist) * step;
-          me.walkTimer=(me.walkTimer||0)+dt;
-          if(me.walkTimer>100){me.walkTimer=0;me.walkFrame=(me.walkFrame+1)%4;}
+        const spdMult = 1 + (me.speedBoost||0) * 0.06;
+        let budget = PLAYER_SPEED * spdMult * (dt/16);
+        let steps = 0;
+        while (budget > 0.1 && steps < 3) {
+          steps++;
+          const tx = me.targetC * CELL + CELL/2;
+          const ty = me.targetR * CELL + CELL/2;
+          const dx = tx - me.x;
+          const dy = ty - me.y;
+          const dist = Math.sqrt(dx*dx+dy*dy);
+          if (dist > 0.5) {
+            const step = Math.min(budget, dist);
+            me.x += (dx/dist) * step;
+            me.y += (dy/dist) * step;
+            budget -= step;
+            me.walkTimer=(me.walkTimer||0)+dt;
+            if(me.walkTimer>100){me.walkTimer=0;me.walkFrame=(me.walkFrame+1)%4;}
+          }
+          // Check tile arrival
+          const remaining = Math.sqrt((me.targetC*CELL+CELL/2-me.x)**2 + (me.targetR*CELL+CELL/2-me.y)**2);
+          if (remaining <= 0.5) {
+            me.x = me.targetC * CELL + CELL/2;
+            me.y = me.targetR * CELL + CELL/2;
+            me.gridR = me.targetR;
+            me.gridC = me.targetC;
+            // Pick next tile from current input
+            const inp = inputStates[mySlot] || {};
+            let dr=0, dc=0;
+            if(inp.up) dr=-1; else if(inp.down) dr=1;
+            if(inp.left) dc=-1; else if(inp.right) dc=1;
+            if(dr!==0 && dc!==0) dr=0;
+            if(dr!==0 || dc!==0) {
+              if(dc<0) me.dir='left'; else if(dc>0) me.dir='right';
+              else if(dr<0) me.dir='up'; else if(dr>0) me.dir='down';
+              const nr = me.gridR + dr;
+              const nc = me.gridC + dc;
+              if(canMoveToTile(nr, nc, me.ghostTimer>0, me.id)) {
+                me.targetR = nr;
+                me.targetC = nc;
+                continue;
+              }
+            }
+            me.walkFrame = 0;
+            break;
+          } else {
+            break;
+          }
         }
         me._visualMoved = true; // flag so simPlayer skips pixel movement
       }
     } else {
       // Client: predict local player, interpolate others
-      const me=players.find(p=>p.id===mySlot);
       if(me&&me.alive) clientPredictMe(me,dt);
 
       const lerpSpeed = 1 - Math.pow(0.02, dt/16);
@@ -3019,7 +3059,7 @@ function renderLoop(ts){
 
   simParticles(dt);
 
-  updateCamera(dt);
+  updateCamera(dt, me);
   render(dt);
 }
 
@@ -3070,7 +3110,7 @@ function clientPredictMe(p,dt){
         else if(dr<0) p.dir='up'; else if(dr>0) p.dir='down';
         const nr = p.gridR + dr;
         const nc = p.gridC + dc;
-        if(canMoveToTilePredicted(nr, nc, p.ghostTimer>0)) {
+        if(canMoveToTile(nr, nc, p.ghostTimer>0, mySlot)) {
           p.targetR = nr;
           p.targetC = nc;
           continue;
@@ -3083,26 +3123,9 @@ function clientPredictMe(p,dt){
     }
   }
 }
-
-function canMoveToTilePredicted(r, c, ghosted) {
-  if(!grid[r]) return false;
-  if(r===0||r===ROWS-1||c===0||c===COLS-1) return false;
-  if(ghosted) return true;
-  if(grid[r][c]===1 || grid[r][c]===2) return false;
-  if(solidBombs) {
-    const bomb = bombs.find(b=>b.r===r&&b.c===c);
-    if(bomb && !(bomb.passthrough && bomb.passthrough[mySlot])) {
-      const me = players.find(p=>p.id===mySlot);
-      if(!me || !me.defuseTimer || me.defuseTimer<=0) return false;
-    }
-  }
-  return true;
-}
-
-function updateCamera(dt){
-  const me=players.find(p=>p.id===mySlot);
+function updateCamera(dt, me){
   if(!me) return;
-  const wrap=document.getElementById('canvas-wrap');
+  const wrap=canvasWrap;
   if(!wrap) return;
   const scale = canvas._scale || 1;
   const vw = wrap.clientWidth / scale;
@@ -3119,18 +3142,12 @@ function updateCamera(dt){
 }
 
 // Pre-built gradient caches
-let floorGrads = null;
-function getFloorGrad(ctx, even) {
-  if (!floorGrads) floorGrads = {};
-  // Simple color — no gradient needed per-tile
-  return even ? '#090a14' : '#0b0c18';
-}
 
 function render(dt){
   if(!ctx||!canvas) return;
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  const wrap=document.getElementById('canvas-wrap');
+  const wrap=canvasWrap;
   const scale = canvas._scale || 1;
   const vw=(wrap?wrap.clientWidth:COLS*CELL) / scale;
   const vh=(wrap?wrap.clientHeight:ROWS*CELL) / scale;
@@ -3614,8 +3631,7 @@ function playVictory(){
 
 function toggleMute(){muted=!muted;if(mg)mg.gain.value=muted?0:VOL;return muted;}
 function warmUp(){mkCtx();if(actx.state==='suspended')actx.resume();}
-function init(){}
-return{playGame:playGame,playVictory:playVictory,stop:stop,init:init,toggleMute:toggleMute,warmUp:warmUp,_started:_started};
+return{playGame:playGame,playVictory:playVictory,stop:stop,toggleMute:toggleMute,warmUp:warmUp};
 })();
 </script>
 </body>
