@@ -2241,22 +2241,28 @@ function explodeBomb(bomb){
 
   const cells=[{r:bomb.r,c:bomb.c}];
   const wallsHit = []; // walls directly hit by explosion
+
+  // First pass: find walls that will be hit (don't destroy yet if fire bomb)
   [{dr:-1,dc:0},{dr:1,dc:0},{dr:0,dc:-1},{dr:0,dc:1}].forEach(({dr,dc})=>{
     for(let i=1;i<=bomb.radius;i++){
       const r2=bomb.r+dr*i, c2=bomb.c+dc*i;
       if(!grid[r2]||grid[r2][c2]===1) break;
       cells.push({r:r2,c:c2});
       if(grid[r2][c2]===2){
+        if(bomb.fire) {
+          wallsHit.push({r:r2,c:c2});
+        }
+        // Destroy the wall
         grid[r2][c2]=0;
         pendingGridChanges.push({r:r2,c:c2,v:0});
-        if(Math.random()<0.25) spawnPowerupAt(r2,c2);
-        if(bomb.fire) wallsHit.push({r:r2,c:c2});
+        if(!bomb.fire && Math.random()<0.25) spawnPowerupAt(r2,c2);
         break;
       }
     }
   });
 
-  // Fire bomb: spread fire to all connected destructible walls
+  // Fire bomb: BFS from seed walls to find all connected walls BEFORE they get destroyed
+  // We need to do the BFS now while the connected walls still exist in the grid
   if(bomb.fire && wallsHit.length>0) {
     spreadFire(wallsHit, bomb.owner);
   }
@@ -2266,31 +2272,40 @@ function explodeBomb(bomb){
   explosions.push({cells,timer:EXPLOSION_DURATION,maxTimer:EXPLOSION_DURATION,owner:bomb.owner});
 }
 
-// Fire spread: BFS from seed walls to find all connected destructible walls, destroy with staggered delay
+// Fire spread: BFS from seed walls outward through connected destructible walls
 function spreadFire(seedWalls, ownerId) {
   const visited = new Set();
-  const queue = []; // {r, c, depth}
+  const queue = [];
+  // Seeds are already destroyed, so start BFS from their neighbors
   seedWalls.forEach(({r,c}) => {
-    const key=`${r},${c}`;
-    visited.add(key);
-    queue.push({r,c,depth:0});
+    visited.add(`${r},${c}`);
+    // Look at all 4 neighbors of each seed wall
+    for(const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nr=r+dr, nc=c+dc;
+      const key=`${nr},${nc}`;
+      if(visited.has(key)) continue;
+      visited.add(key);
+      if(!grid[nr] || grid[nr][nc]!==2) continue;
+      queue.push({r:nr,c:nc,depth:1});
+    }
   });
 
-  const toDestroy = []; // {r, c, delay}
-  const SPREAD_DELAY = 80; // ms per tile of spread
-  const MAX_SPREAD = 200; // cap total tiles
+  const toDestroy = [];
+  const SPREAD_DELAY = 200; // ms per tile of spread — visible wave
+  const MAX_SPREAD = 200;
 
+  // Process the initial neighbors
   while(queue.length > 0 && toDestroy.length < MAX_SPREAD) {
     const cur = queue.shift();
+    toDestroy.push({r:cur.r, c:cur.c, delay:cur.depth * SPREAD_DELAY});
+    // Continue BFS to neighbors
     for(const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
       const nr=cur.r+dr, nc=cur.c+dc;
       const key=`${nr},${nc}`;
       if(visited.has(key)) continue;
       visited.add(key);
       if(!grid[nr] || grid[nr][nc]!==2) continue;
-      const depth = cur.depth+1;
-      toDestroy.push({r:nr,c:nc,delay:depth*SPREAD_DELAY});
-      queue.push({r:nr,c:nc,depth});
+      queue.push({r:nr,c:nc,depth:cur.depth+1});
     }
   }
 
