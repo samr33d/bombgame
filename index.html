@@ -549,6 +549,7 @@ header {
           <button class="mode-btn active" onclick="togglePowerup('GHOST')" id="pu-GHOST">👻 GHOST</button>
           <button class="mode-btn active" onclick="togglePowerup('SHOVEL')" id="pu-SHOVEL">⛏️ PICK AXE</button>
           <button class="mode-btn active" onclick="togglePowerup('DEFUSE')" id="pu-DEFUSE">🔧 DEFUSE</button>
+          <button class="mode-btn active" onclick="togglePowerup('FIREBOMB')" id="pu-FIREBOMB">🔥 FIRE BOMB</button>
           <button class="mode-btn active" onclick="togglePowerup('LIFE')" id="pu-LIFE">💎 LIFE</button>
         </div>
       </div>
@@ -606,7 +607,7 @@ header {
     <div class="info-card">
       <div class="info-card-title">POWER-UPS</div>
       <div class="info-card-body">
-        🔥 Bigger blast<br>💣 More bombs<br>👟 Speed up (permanent)<br>🛡️ Shield (1 hit)<br>👻 Ghost (10s, pass walls)<br>⛏️ Pick axe (10s, break walls)<br>🔧 Defuse (10s, disarm bombs)<br>💎 Extra life (rare)
+        🔥 Bigger blast<br>💣 More bombs<br>👟 Speed up (permanent)<br>🛡️ Shield (1 hit)<br>👻 Ghost (10s, pass walls)<br>⛏️ Pick axe (10s, break walls)<br>🔧 Defuse (10s, disarm bombs)<br>🔥 Fire bomb (next bomb spreads fire)<br>💎 Extra life (rare)
       </div>
     </div>
     <div class="info-card">
@@ -701,6 +702,7 @@ const POWER_UP_TYPES = {
   GHOST:  { icon:'👻', color:'#bb88ff', label:'GHOST MODE' },
   SHOVEL: { icon:'⛏️', color:'#cc8844', label:'PICK AXE' },
   DEFUSE: { icon:'🔧', color:'#66ddaa', label:'DEFUSE' },
+  FIREBOMB: { icon:'🔥', color:'#ff4400', label:'FIRE BOMB' },
   LIFE:   { icon:'💎', color:'#ff44ff', label:'+1 LIFE' },
 };
 const POWERUP_KEYS = Object.keys(POWER_UP_TYPES);
@@ -716,7 +718,7 @@ let clientConns = {};
 let roomCode = null;
 let lobbyPlayers = [];
 let selectedMode = 'classic';
-let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, SHOVEL:true, DEFUSE:true, LIFE:true };
+let powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, SHOVEL:true, DEFUSE:true, FIREBOMB:true, LIFE:true };
 let friendlyFire = true; // self-damage from own bombs
 let teamMode = false; // false = FFA, true = 2 teams
 let solidBombs = true; // false = pass through, true = bombs block movement
@@ -740,6 +742,7 @@ let aiStates = {}; // per-bot AI brain state
 let lastSim = 0;
 let pendingGridChanges = [];
 let pendingPowerupChanges = [];
+let pendingFires = []; // fire spread timers: {r,c,timer,owner}
 
 let animFrame = null;
 let viewport = { x: 0, y: 0 };
@@ -1059,15 +1062,16 @@ function broadcastState() {
       id:p.id, x:p.x, y:p.y, alive:p.alive, lives:p.lives,
       gridR:p.gridR, gridC:p.gridC, targetR:p.targetR, targetC:p.targetC,
       dir:p.dir, walkFrame:p.walkFrame, invincible:p.invincible>0,
-      frozen:p.frozen>0, shield:p.shield, speedBoost:p.speedBoost||0, ghostTimer:p.ghostTimer||0, shovelTimer:p.shovelTimer||0, defuseTimer:p.defuseTimer||0,
+      frozen:p.frozen>0, shield:p.shield, speedBoost:p.speedBoost||0, ghostTimer:p.ghostTimer||0, shovelTimer:p.shovelTimer||0, defuseTimer:p.defuseTimer||0, fireTimer:p.fireTimer||0,
       blastRadius:p.blastRadius, maxBombs:p.maxBombs, kills:p.kills,
       isBot:p.isBot||false,
     })),
-    bombs: bombs.map(b => ({r:b.r,c:b.c,owner:b.owner,timer:b.timer,maxTimer:b.maxTimer,radius:b.radius,pulse:b.pulse||0,passthrough:b.passthrough||{}})),
+    bombs: bombs.map(b => ({r:b.r,c:b.c,owner:b.owner,timer:b.timer,maxTimer:b.maxTimer,radius:b.radius,pulse:b.pulse||0,passthrough:b.passthrough||{},fire:b.fire||false})),
     explosions: explosions.map(e => ({cells:e.cells,timer:e.timer,maxTimer:e.maxTimer})),
     powerups: powerups.map(pu => ({r:pu.r,c:pu.c,type:pu.type,id:pu.id})),
     gridChanges: pendingGridChanges,
     freeze: freezeAll,
+    fires: pendingFires.map(f=>({r:f.r,c:f.c,timer:f.timer,owner:f.owner})),
     blitzTimer: gameMode==='blitz' ? blitzTimer : undefined,
   };
   pendingGridChanges = [];
@@ -1191,7 +1195,7 @@ function handleClientReceive(data) {
         }
         lp.alive=sp.alive; lp.lives=sp.lives; lp.invincible=sp.invincible?800:0;
         lp.shield=sp.shield; lp.frozen=sp.frozen?500:0;
-        lp.speedBoost=sp.speedBoost||0; lp.ghostTimer=sp.ghostTimer||0; lp.shovelTimer=sp.shovelTimer||0; lp.defuseTimer=sp.defuseTimer||0;
+        lp.speedBoost=sp.speedBoost||0; lp.ghostTimer=sp.ghostTimer||0; lp.shovelTimer=sp.shovelTimer||0; lp.defuseTimer=sp.defuseTimer||0; lp.fireTimer=sp.fireTimer||0;
         lp.blastRadius=sp.blastRadius; lp.maxBombs=sp.maxBombs;
         lp.kills=sp.kills||0;
       } else {
@@ -1203,7 +1207,7 @@ function handleClientReceive(data) {
         lp.walkFrame=sp.walkFrame; lp.invincible=sp.invincible?800:0;
         lp.frozen=sp.frozen?500:0; lp.shield=sp.shield;
         lp.speedBoost=sp.speedBoost||0;
-        lp.ghostTimer=sp.ghostTimer||0; lp.shovelTimer=sp.shovelTimer||0; lp.defuseTimer=sp.defuseTimer||0;
+        lp.ghostTimer=sp.ghostTimer||0; lp.shovelTimer=sp.shovelTimer||0; lp.defuseTimer=sp.defuseTimer||0; lp.fireTimer=sp.fireTimer||0;
         lp.kills=sp.kills||0;
       }
     });
@@ -1212,6 +1216,7 @@ function handleClientReceive(data) {
     powerups = data.powerups || [];
     if (data.gridChanges) data.gridChanges.forEach(({r,c,v}) => { if(grid[r]) grid[r][c]=v; });
     freezeAll = data.freeze || false;
+    if(data.fires) pendingFires = data.fires;
     if (data.blitzTimer !== undefined) blitzTimer = data.blitzTimer;
     updateHUD();
     updateRoundTimer();
@@ -1420,7 +1425,7 @@ function initGameState() {
       gridR: sp.r, gridC: sp.c, targetR: sp.r, targetC: sp.c,
       alive: true, lives: startLives,
       bombCooldown: 0, maxBombs: 2, activeBombs: 0,
-      invincible: 0, frozen: 0, shield: false, speedBoost: 0, ghostTimer: 0, shovelTimer: 0, defuseTimer: 0,
+      invincible: 0, frozen: 0, shield: false, speedBoost: 0, ghostTimer: 0, shovelTimer: 0, defuseTimer: 0, fireTimer: 0,
       blastRadius: DEFAULT_BOMB_RADIUS,
       dir:'down', walkFrame:0, walkTimer:0, kills: 0,
     };
@@ -1441,7 +1446,7 @@ function initGameState() {
   bombs=[]; explosions=[]; particles=[]; powerups=[];
   gameOver=false; freezeAll=false; freezeTimer=0;
   blitzTimer = BLITZ_TIME;
-  pendingGridChanges=[];
+  pendingGridChanges=[]; pendingFires=[];
   Object.keys(inputStates).forEach(k => inputStates[k]=blankInput());
   pendingBombs.clear();
 }
@@ -2009,6 +2014,7 @@ function simTick() {
   players.forEach(p => { if(p.alive) simPlayer(p, dt); });
   simBombs(dt);
   simExplosions(dt);
+  simFires(dt);
   spawnPowerups();
   checkWin();
   updateHUD();
@@ -2125,6 +2131,10 @@ function simPlayer(p, dt) {
     p.defuseTimer-=dt;
     if(p.defuseTimer<=0) p.defuseTimer=0;
   }
+  if(p.fireTimer>0) {
+    p.fireTimer-=dt;
+    if(p.fireTimer<=0) p.fireTimer=0;
+  }
 
   // Check power-up collection
   const {r,c}=getCell(p.x,p.y);
@@ -2176,14 +2186,6 @@ function canMoveToTile(r, c, ghosted, playerId) {
       if(!pl || !pl.defuseTimer || pl.defuseTimer<=0) return false;
     }
   }
-  // Player collision: can't move into a tile occupied by another player
-  for (const other of players) {
-    if (!other.alive || other.id === playerId) continue;
-    if (other.ghostTimer > 0) continue; // ghosted players don't block
-    if (other.gridR === r && other.gridC === c) return false;
-    // Also block if other player is moving toward this tile
-    if (other.targetR === r && other.targetC === c) return false;
-  }
   return true;
 }
 
@@ -2217,8 +2219,8 @@ function dropBomb(p){
   if(bombs.some(b=>b.r===r&&b.c===c)) return;
   p.activeBombs++;
   p.bombCooldown=300;
-  const bomb = {r,c,owner:p.id,timer:BOMB_TIMER_MS,maxTimer:BOMB_TIMER_MS,radius:p.blastRadius,pulse:0,passthrough:{}};
-  // All players currently on this tile can pass through until they leave
+  const isFireBomb = (p.fireTimer||0) > 0;
+  const bomb = {r,c,owner:p.id,timer:BOMB_TIMER_MS,maxTimer:BOMB_TIMER_MS,radius:p.blastRadius,pulse:0,passthrough:{},fire:isFireBomb};
   players.forEach(pl=>{
     if(!pl.alive) return;
     if(pl.gridR===r && pl.gridC===c) bomb.passthrough[pl.id]=true;
@@ -2238,6 +2240,7 @@ function explodeBomb(bomb){
   if(owner) owner.activeBombs=Math.max(0,owner.activeBombs-1);
 
   const cells=[{r:bomb.r,c:bomb.c}];
+  const wallsHit = []; // walls directly hit by explosion
   [{dr:-1,dc:0},{dr:1,dc:0},{dr:0,dc:-1},{dr:0,dc:1}].forEach(({dr,dc})=>{
     for(let i=1;i<=bomb.radius;i++){
       const r2=bomb.r+dr*i, c2=bomb.c+dc*i;
@@ -2246,21 +2249,83 @@ function explodeBomb(bomb){
       if(grid[r2][c2]===2){
         grid[r2][c2]=0;
         pendingGridChanges.push({r:r2,c:c2,v:0});
-        // Chance to drop power-up
         if(Math.random()<0.25) spawnPowerupAt(r2,c2);
+        if(bomb.fire) wallsHit.push({r:r2,c:c2});
         break;
       }
     }
   });
+
+  // Fire bomb: spread fire to all connected destructible walls
+  if(bomb.fire && wallsHit.length>0) {
+    spreadFire(wallsHit, bomb.owner);
+  }
+
   // Chain explosions
   bombs.forEach(b2=>{ if(cells.some(ec=>ec.r===b2.r&&ec.c===b2.c)) b2.timer=Math.min(b2.timer,50); });
   explosions.push({cells,timer:EXPLOSION_DURATION,maxTimer:EXPLOSION_DURATION,owner:bomb.owner});
 }
 
+// Fire spread: BFS from seed walls to find all connected destructible walls, destroy with staggered delay
+function spreadFire(seedWalls, ownerId) {
+  const visited = new Set();
+  const queue = []; // {r, c, depth}
+  seedWalls.forEach(({r,c}) => {
+    const key=`${r},${c}`;
+    visited.add(key);
+    queue.push({r,c,depth:0});
+  });
+
+  const toDestroy = []; // {r, c, delay}
+  const SPREAD_DELAY = 80; // ms per tile of spread
+  const MAX_SPREAD = 200; // cap total tiles
+
+  while(queue.length > 0 && toDestroy.length < MAX_SPREAD) {
+    const cur = queue.shift();
+    for(const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nr=cur.r+dr, nc=cur.c+dc;
+      const key=`${nr},${nc}`;
+      if(visited.has(key)) continue;
+      visited.add(key);
+      if(!grid[nr] || grid[nr][nc]!==2) continue;
+      const depth = cur.depth+1;
+      toDestroy.push({r:nr,c:nc,delay:depth*SPREAD_DELAY});
+      queue.push({r:nr,c:nc,depth});
+    }
+  }
+
+  // Schedule staggered destruction
+  toDestroy.forEach(({r,c,delay}) => {
+    pendingFires.push({r,c,timer:delay,owner:ownerId});
+  });
+}
+
 function simExplosions(dt){ explosions.forEach(e=>e.timer-=dt); explosions=explosions.filter(e=>e.timer>0); }
 
+function simFires(dt) {
+  const ready = [];
+  pendingFires.forEach(f => { f.timer -= dt; });
+  // Process fires that are ready
+  pendingFires = pendingFires.filter(f => {
+    if(f.timer <= 0) {
+      // Only destroy if still a destructible wall (might have been destroyed by another explosion)
+      if(grid[f.r] && grid[f.r][f.c] === 2) {
+        grid[f.r][f.c] = 0;
+        pendingGridChanges.push({r:f.r, c:f.c, v:0});
+        // Fire explosions damage players on these tiles
+        explosions.push({cells:[{r:f.r,c:f.c}], timer:300, maxTimer:300, owner:f.owner});
+        spawnParticles(f.c*CELL+CELL/2, f.r*CELL+CELL/2, '#ff6600', 6);
+        // Small chance for powerup
+        if(Math.random()<0.12) spawnPowerupAt(f.r, f.c);
+      }
+      return false; // remove from queue
+    }
+    return true; // keep in queue
+  });
+}
+
 let puIdCounter=0;
-const POWERUP_WEIGHTS = { BLAST:10, BOMB:10, SPEED:10, SHIELD:8, GHOST:4, SHOVEL:6, DEFUSE:5, LIFE:2 };
+const POWERUP_WEIGHTS = { BLAST:10, BOMB:10, SPEED:10, SHIELD:8, GHOST:4, SHOVEL:6, DEFUSE:5, FIREBOMB:3, LIFE:2 };
 
 function spawnPowerupAt(r,c){
   if(powerups.some(p=>p.r===r&&p.c===c)) return;
@@ -2307,6 +2372,7 @@ function collectPowerup(p, idx){
     case 'GHOST':  p.ghostTimer=10000; p.shovelTimer=0; break;
     case 'SHOVEL': p.shovelTimer=10000; p.ghostTimer=0; break;
     case 'DEFUSE': p.defuseTimer=10000; break;
+    case 'FIREBOMB': p.fireTimer=10000; break;
     case 'LIFE':   p.lives=Math.min(p.lives+1,5); break;
   }
   updateHUD();
@@ -2328,12 +2394,7 @@ function hitPlayer(p, ownerSlot){
     explosions.push({cells:[{r:Math.floor(p.y/CELL),c:Math.floor(p.x/CELL)}],timer:500,maxTimer:500,owner:ownerSlot});
   } else {
     const spawns=getSpawnPositions();
-    // Find a spawn not occupied by another player
-    let sp = spawns[p.id%spawns.length];
-    for (const candidate of spawns) {
-      const occupied = players.some(other => other.alive && other.id!==p.id && other.gridR===candidate.r && other.gridC===candidate.c);
-      if (!occupied) { sp = candidate; break; }
-    }
+    const sp=spawns[p.id%spawns.length];
     p.x=sp.c*CELL+CELL/2; p.y=sp.r*CELL+CELL/2;
     p.gridR=sp.r; p.gridC=sp.c; p.targetR=sp.r; p.targetC=sp.c;
     spawnParticles(p.x,p.y,p.color,8);
@@ -2456,6 +2517,7 @@ function updateHUD(){
       ${p.ghostTimer>0?`<span class="hud-powerup">👻${Math.ceil(p.ghostTimer/1000)}s</span>`:''}
       ${p.shovelTimer>0?`<span class="hud-powerup">⛏️${Math.ceil(p.shovelTimer/1000)}s</span>`:''}
       ${p.defuseTimer>0?`<span class="hud-powerup">🔧${Math.ceil(p.defuseTimer/1000)}s</span>`:''}
+      ${p.fireTimer>0?`<span class="hud-powerup">🔥${Math.ceil(p.fireTimer/1000)}s</span>`:''}
       <span class="hud-lives">${'♥'.repeat(Math.max(0,p.lives))}</span>
       ${gameMode==='blitz'?`<span style="color:var(--text-dim);font-size:0.72rem;margin-left:2px">×${p.kills||0}</span>`:''}
     </div>`;
@@ -2612,7 +2674,7 @@ function quitGame(){
   if(peer){peer.destroy();peer=null;}
   isHost=false; mySlot=-1; lobbyPlayers=[];
   botCount=0; aiStates={};
-  powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, SHOVEL:true, DEFUSE:true, LIFE:true };
+  powerupToggles = { BLAST:true, BOMB:true, SPEED:true, SHIELD:true, GHOST:true, SHOVEL:true, DEFUSE:true, FIREBOMB:true, LIFE:true };
   friendlyFire = true; teamMode = false; solidBombs = true;
   const ffBtn=document.getElementById('btn-ff');
   if(ffBtn){ffBtn.textContent='🔥 FRIENDLY FIRE: ON';ffBtn.classList.add('active');}
@@ -2752,13 +2814,6 @@ function canMoveToTilePredicted(r, c, ghosted) {
       if(!me || !me.defuseTimer || me.defuseTimer<=0) return false;
     }
   }
-  // Player collision prediction
-  for (const other of players) {
-    if (!other.alive || other.id === mySlot) continue;
-    if (other.ghostTimer > 0) continue;
-    if (other.gridR === r && other.gridC === c) return false;
-    if (other.targetR === r && other.targetC === c) return false;
-  }
   return true;
 }
 
@@ -2845,6 +2900,21 @@ function render(dt){
     }
   }
 
+  // ── Pending fire spread ──
+  pendingFires.forEach(f=>{
+    if(f.c<c0||f.c>c1||f.r<r0||f.r>r1) return;
+    const px=f.c*CELL+CELL/2, py=f.r*CELL+CELL/2;
+    const flicker = 0.3 + Math.sin(performance.now()*0.01+f.r*3+f.c*7)*0.15;
+    ctx.save();
+    ctx.globalAlpha=flicker;
+    ctx.fillStyle='#ff4400';
+    ctx.fillRect(f.c*CELL+2,f.r*CELL+2,CELL-4,CELL-4);
+    ctx.globalAlpha=flicker*0.6;
+    ctx.fillStyle='#ffaa00';
+    ctx.fillRect(f.c*CELL+6,f.r*CELL+6,CELL-12,CELL-12);
+    ctx.restore();
+  });
+
   // ── Explosion glow BG ──
   explosions.forEach(exp=>{
     const t=exp.timer/exp.maxTimer;
@@ -2883,7 +2953,7 @@ function render(dt){
     ctx.fillStyle=info.color;
     ctx.font=`bold ${CELL*0.28}px "Geist Mono",monospace`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    const shortLabel = {BLAST:'FIR',BOMB:'BMB',SPEED:'SPD',SHIELD:'SHL',GHOST:'GHO',SHOVEL:'AXE',DEFUSE:'DEF',LIFE:'+HP',FREEZE:'FRZ'}[pu.type]||'?';
+    const shortLabel = {BLAST:'FIR',BOMB:'BMB',SPEED:'SPD',SHIELD:'SHL',GHOST:'GHO',SHOVEL:'AXE',DEFUSE:'DEF',FIREBOMB:'F.B',LIFE:'+HP',FREEZE:'FRZ'}[pu.type]||'?';
     ctx.fillText(shortLabel,px2,py3);
     ctx.restore();
   });
@@ -2896,16 +2966,29 @@ function render(dt){
     const br=CELL*0.32*pulse;
     const urgency=1-b.timer/b.maxTimer;
     ctx.save();
-    ctx.shadowColor=urgency>0.6?'#ff2222':'#ff8800'; ctx.shadowBlur=16+pulse*8;
-    ctx.fillStyle='#111';
-    ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle=urgency>0.6?'#ff3c3c':'#ffaa00';
-    ctx.lineWidth=2; ctx.stroke();
+    if(b.fire) {
+      // Fire bomb: orange-red glow
+      ctx.shadowColor='#ff4400'; ctx.shadowBlur=22+pulse*10;
+      ctx.fillStyle='#331100';
+      ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='#ff4400'; ctx.lineWidth=2.5; ctx.stroke();
+      // Flame ring
+      ctx.globalAlpha=0.5+Math.sin(performance.now()*0.008)*0.3;
+      ctx.strokeStyle='#ffaa00'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(bx,by,br*1.4,0,Math.PI*2); ctx.stroke();
+      ctx.globalAlpha=1;
+    } else {
+      ctx.shadowColor=urgency>0.6?'#ff2222':'#ff8800'; ctx.shadowBlur=16+pulse*8;
+      ctx.fillStyle='#111';
+      ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle=urgency>0.6?'#ff3c3c':'#ffaa00';
+      ctx.lineWidth=2; ctx.stroke();
+    }
     // Highlight
     ctx.fillStyle='rgba(255,255,255,0.15)';
     ctx.beginPath(); ctx.arc(bx-br*0.3,by-br*0.3,br*0.4,0,Math.PI*2); ctx.fill();
     // Fuse
-    ctx.strokeStyle='#ffaa44'; ctx.lineWidth=1.5;
+    ctx.strokeStyle=b.fire?'#ff6600':'#ffaa44'; ctx.lineWidth=1.5;
     ctx.beginPath(); ctx.moveTo(bx,by-br);
     ctx.quadraticCurveTo(bx+br*0.9,by-br*1.3,bx+br*0.5,by-br*1.7); ctx.stroke();
     // Spark
