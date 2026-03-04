@@ -1266,20 +1266,23 @@ function handleClientReceive(data) {
       if (!lp) return;
       lp.isBot = sp.isBot||false;
       if (sp.id === mySlot) {
-        // Client prediction owns position — apply gentle continuous correction
-        const hostX = sp.x || (sp.targetC*CELL+CELL/2);
-        const hostY = sp.y || (sp.targetR*CELL+CELL/2);
-        const drift = Math.abs(lp.x-hostX)+Math.abs(lp.y-hostY);
-        if (drift > CELL*5) {
-          // Hard snap only if very far off (respawn/desync)
+        // Client prediction owns pixel position entirely
+        // Only correct grid state if tiles diverge significantly
+        const hostGridR = sp.gridR;
+        const hostGridC = sp.gridC;
+        const clientGridR = lp.gridR;
+        const clientGridC = lp.gridC;
+        const tileDrift = Math.abs(hostGridR-clientGridR) + Math.abs(hostGridC-clientGridC);
+        const justRespawned = !lp.alive && sp.alive;
+        if (tileDrift > 3 || justRespawned) {
+          // Major desync, respawn, or lag spike — hard snap to host
+          const hostX = sp.x || (sp.targetC*CELL+CELL/2);
+          const hostY = sp.y || (sp.targetR*CELL+CELL/2);
           lp.x=hostX; lp.y=hostY;
           lp.gridR=sp.gridR; lp.gridC=sp.gridC;
           lp.targetR=sp.targetR; lp.targetC=sp.targetC;
-        } else if (drift > CELL*0.5) {
-          // Gentle nudge toward host position (small correction each tick)
-          lp.x = lerp(lp.x, hostX, 0.08);
-          lp.y = lerp(lp.y, hostY, 0.08);
         }
+        // Always sync non-position state from host
         lp.alive=sp.alive; lp.lives=sp.lives; lp.invincible=sp.invincible?800:0;
         lp.shield=sp.shield; lp.frozen=sp.frozen?500:0;
         lp.speedBoost=sp.speedBoost||0; lp.ghostTimer=sp.ghostTimer||0; lp.shovelTimer=sp.shovelTimer||0; lp.defuseTimer=sp.defuseTimer||0; lp.fireTimer=sp.fireTimer||0;
@@ -2187,6 +2190,10 @@ function simTick() {
 
 function simPlayer(p, dt) {
   const inp = inputStates[p.id] || blankInput();
+  // If visual interp already moved this player's pixels this frame, skip pixel movement
+  // but still handle tile transitions
+  const skipPixelMove = !!p._visualMoved;
+  if(p._visualMoved) p._visualMoved = false;
 
   if (p.frozen > 0) { p.frozen-=dt; }
   else {
@@ -2204,14 +2211,16 @@ function simPlayer(p, dt) {
       const dy = ty - p.y;
       const dist = Math.sqrt(dx*dx + dy*dy);
 
-      if (dist > 0.5) {
-        // Moving toward target
+      if (dist > 0.5 && !skipPixelMove) {
+        // Moving toward target (skip if visual interp already moved us)
         const step = Math.min(budget, dist);
         p.x += (dx/dist) * step;
         p.y += (dy/dist) * step;
         budget -= step;
         p.walkTimer=(p.walkTimer||0)+dt;
         if(p.walkTimer>100){p.walkTimer=0;p.walkFrame=(p.walkFrame+1)%4;}
+      } else if (skipPixelMove) {
+        budget -= Math.min(budget, dist);
       }
 
       // Check if arrived (or already there)
@@ -2910,25 +2919,45 @@ function renderLoop(ts){
   const dt=Math.min(ts-lastTime2,50);
   lastTime2=ts;
 
-  // Smooth visual interpolation for local player (both host and client)
+  // Smooth visual interpolation for players
   if(gameRunning){
-    const me=players.find(p=>p.id===mySlot);
-    if(me&&me.alive){
-      if(isHost) {
-        // Host: visually interpolate toward target between sim ticks
-        hostVisualInterp(me, dt);
-      } else {
-        clientPredictMe(me,dt);
+    if(isHost) {
+      // Host: smooth visual interpolation between 30hz sim ticks
+      const me=players.find(p=>p.id===mySlot);
+      if(me&&me.alive&&!me.frozen) {
+        const tx = me.targetC * CELL + CELL/2;
+        const ty = me.targetR * CELL + CELL/2;
+        const dx = tx - me.x;
+        const dy = ty - me.y;
+        const dist = Math.sqrt(dx*dx+dy*dy);
+        if (dist > 0.5) {
+          const spdMult = 1 + (me.speedBoost||0) * 0.06;
+          const spd = PLAYER_SPEED * spdMult * (dt/16);
+          const step = Math.min(spd, dist);
+          me.x += (dx/dist) * step;
+          me.y += (dy/dist) * step;
+          me.walkTimer=(me.walkTimer||0)+dt;
+          if(me.walkTimer>100){me.walkTimer=0;me.walkFrame=(me.walkFrame+1)%4;}
+        }
+        me._visualMoved = true; // flag so simPlayer skips pixel movement
       }
-    }
-    // Smooth interpolation for other players on client
-    if(!isHost) {
-      const lerpSpeed = 1 - Math.pow(0.02, dt/16); // ~0.15 per frame at 60fps, smooth
+    } else {
+      // Client: predict local player, interpolate others
+      const me=players.find(p=>p.id===mySlot);
+      if(me&&me.alive) clientPredictMe(me,dt);
+
+      const lerpSpeed = 1 - Math.pow(0.02, dt/16);
       players.forEach(p => {
         if(p.id===mySlot || !p.alive) return;
         if(p._serverX!==undefined) {
-          p.x = lerp(p.x, p._serverX, lerpSpeed);
-          p.y = lerp(p.y, p._serverY, lerpSpeed);
+          const dist = Math.abs(p.x-p._serverX)+Math.abs(p.y-p._serverY);
+          if(dist > CELL*4) {
+            p.x = p._serverX;
+            p.y = p._serverY;
+          } else {
+            p.x = lerp(p.x, p._serverX, lerpSpeed);
+            p.y = lerp(p.y, p._serverY, lerpSpeed);
+          }
         }
       });
     }
@@ -2942,24 +2971,6 @@ function renderLoop(ts){
 
 // Host visual interpolation — smoothly moves the player's render position
 // toward their target tile between sim ticks, without changing authoritative state
-function hostVisualInterp(p, dt) {
-  if(p.frozen>0) return;
-  const tx = p.targetC * CELL + CELL/2;
-  const ty = p.targetR * CELL + CELL/2;
-  const dx = tx - p.x;
-  const dy = ty - p.y;
-  const dist = Math.sqrt(dx*dx+dy*dy);
-  if (dist > 0.5) {
-    const spdMult = 1 + (p.speedBoost||0) * 0.06;
-    const spd = PLAYER_SPEED * spdMult * (dt/16);
-    const step = Math.min(spd, dist);
-    p.x += (dx/dist) * step;
-    p.y += (dy/dist) * step;
-    p.walkTimer=(p.walkTimer||0)+dt;
-    if(p.walkTimer>100){p.walkTimer=0;p.walkFrame=(p.walkFrame+1)%4;}
-  }
-}
-
 function clientPredictMe(p,dt){
   if(p.frozen>0) return;
   const inp=buildMyInput();
