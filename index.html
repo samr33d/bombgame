@@ -433,6 +433,7 @@ header {
     <div class="note-entry">
       <div class="note-version">v1.6 — LATEST</div>
       <div class="note-items">
+        Fixed players unable to join after host quit a previous game (gameOver not reset on new room)<br>
         Fixed client rubber banding: removed aggressive position correction (tileDrift > 3 snap)<br>
         Client prediction now fully authoritative — position only overridden on respawn, ghost eject, or catastrophic desync (>15 tiles)<br>
         Fixed inputInterval not surviving quit+rejoin (clients couldn't send input after reconnect)<br>
@@ -979,6 +980,8 @@ function hostGame() {
   const name = (document.getElementById('host-name').value.trim() || randomName()).toUpperCase().substring(0,8);
   clearErr('host-err');
   isHost = true;
+  gameOver = false;
+  gameRunning = false;
 
   initPeer(pid => {
     roomCode = pid;
@@ -1178,7 +1181,8 @@ function joinGame() {
   if (!code || code.length < 4) { showErr('join-err','Enter a valid room code'); return; }
   clearErr('join-err');
   isHost = false;
-  showErr('join-err', '');
+  gameOver = false;
+  gameRunning = false;
 
   initPeer(() => {
     hostConn = peer.connect(code, { reliable: true });
