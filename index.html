@@ -628,16 +628,16 @@ header {
       <div class="card-section">
         <div class="field-label">POWER-UPS</div>
         <div class="mode-select" id="powerup-toggles">
-          <button class="mode-btn active" onclick="togglePowerup('BLAST')" id="pu-BLAST">🔥 BLAST</button>
-          <button class="mode-btn active" onclick="togglePowerup('BOMB')" id="pu-BOMB">💣 BOMB</button>
-          <button class="mode-btn active" onclick="togglePowerup('SPEED')" id="pu-SPEED">👟 SPEED</button>
+          <button class="mode-btn active" onclick="togglePowerup('BLAST')" id="pu-BLAST">🔥 BLAST RADIUS</button>
+          <button class="mode-btn active" onclick="togglePowerup('BOMB')" id="pu-BOMB">💣 +BOMB</button>
+          <button class="mode-btn active" onclick="togglePowerup('SPEED')" id="pu-SPEED">👟 SPEED BOOST</button>
           <button class="mode-btn active" onclick="togglePowerup('SHIELD')" id="pu-SHIELD">🛡️ SHIELD</button>
           <button class="mode-btn active" onclick="togglePowerup('FREEZE')" id="pu-FREEZE">❄️ FREEZE</button>
-          <button class="mode-btn active" onclick="togglePowerup('GHOST')" id="pu-GHOST">👻 GHOST</button>
+          <button class="mode-btn active" onclick="togglePowerup('GHOST')" id="pu-GHOST">👻 GHOST MODE</button>
           <button class="mode-btn active" onclick="togglePowerup('SHOVEL')" id="pu-SHOVEL">⛏️ PICK AXE</button>
           <button class="mode-btn active" onclick="togglePowerup('DEFUSE')" id="pu-DEFUSE">🔧 DEFUSE</button>
           <button class="mode-btn active" onclick="togglePowerup('FIREBOMB')" id="pu-FIREBOMB">🔥 FIRE BOMB</button>
-          <button class="mode-btn active" onclick="togglePowerup('LIFE')" id="pu-LIFE">💎 LIFE</button>
+          <button class="mode-btn active" onclick="togglePowerup('LIFE')" id="pu-LIFE">💎 +LIFE</button>
         </div>
       </div>
 
@@ -694,7 +694,7 @@ header {
     <div class="info-card">
       <div class="info-card-title">POWER-UPS</div>
       <div class="info-card-body">
-        🔥 Bigger blast<br>💣 More bombs<br>👟 Speed up (permanent)<br>🛡️ Shield (1 hit)<br>❄️ Freeze (4s, freeze others)<br>👻 Ghost (10s, pass walls)<br>⛏️ Pick axe (10s, break walls)<br>🔧 Defuse (10s, disarm bombs)<br>🔥 Fire bomb (next bomb spreads fire)<br>💎 Extra life (rare)
+        🔥 Blast Radius — bigger explosion<br>💣 +Bomb — carry more bombs<br>👟 Speed Boost — move faster (permanent)<br>🛡️ Shield — absorb 1 hit<br>❄️ Freeze — freeze others (4s)<br>👻 Ghost Mode — phase through walls (10s)<br>⛏️ Pick Axe — break walls on touch (10s)<br>🔧 Defuse — disarm enemy bombs (10s)<br>🔥 Fire Bomb — bombs spread fire to walls (10s)<br>💎 +Life — extra life (rare)
       </div>
     </div>
     <div class="info-card">
@@ -781,11 +781,11 @@ const COLORS = ['#ff3c5a','#00e5ff','#aaff44','#ffaa00','#cc44ff','#ff88cc','#44
 const DARKS  = ['#7a0020','#007a80','#447700','#7a4400','#660099','#882255','#007755','#888800'];
 
 const POWER_UP_TYPES = {
-  BLAST:  { icon:'🔥', color:'#ff6b35', label:'BIGGER BLAST' },
-  BOMB:   { icon:'💣', color:'#ffcc00', label:'+1 BOMB' },
-  SPEED:  { icon:'👟', color:'#44ff88', label:'SPEED UP' },
+  BLAST:  { icon:'🔥', color:'#ff6b35', label:'BLAST RADIUS' },
+  BOMB:   { icon:'💣', color:'#ffcc00', label:'+BOMB' },
+  SPEED:  { icon:'👟', color:'#44ff88', label:'SPEED BOOST' },
   SHIELD: { icon:'🛡️', color:'#00e5ff', label:'SHIELD' },
-  FREEZE: { icon:'❄️', color:'#88ccff', label:'FREEZE ALL' },
+  FREEZE: { icon:'❄️', color:'#88ccff', label:'FREEZE' },
   GHOST:  { icon:'👻', color:'#bb88ff', label:'GHOST MODE' },
   SHOVEL: { icon:'⛏️', color:'#cc8844', label:'PICK AXE' },
   DEFUSE: { icon:'🔧', color:'#66ddaa', label:'DEFUSE' },
