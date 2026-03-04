@@ -1033,7 +1033,7 @@ function hostStartGame() {
   if (!isHost) return;
   gameMode = selectedMode;
   initGameState();
-  const msg = { type:'GAME_START', grid: serializeGrid(), players, bombs:[], explosions:[], powerups:[], mode: gameMode };
+  const msg = { type:'GAME_START', grid: serializeGrid(), players, bombs:[], explosions:[], powerups:[], mode: gameMode, teamMode, friendlyFire, powerupToggles };
   Object.values(clientConns).forEach(c => c.send(msg));
   launchGame();
 }
@@ -1148,6 +1148,9 @@ function handleClientReceive(data) {
     bombs = []; explosions = [];
     powerups = data.powerups || [];
     gameMode = data.mode || 'classic';
+    if (data.teamMode !== undefined) teamMode = data.teamMode;
+    if (data.friendlyFire !== undefined) friendlyFire = data.friendlyFire;
+    if (data.powerupToggles) powerupToggles = data.powerupToggles;
     launchGame();
     return;
   }
@@ -1170,6 +1173,7 @@ function handleClientReceive(data) {
         lp.alive=sp.alive; lp.lives=sp.lives; lp.dir=sp.dir;
         lp.walkFrame=sp.walkFrame; lp.invincible=sp.invincible?800:0;
         lp.frozen=sp.frozen?500:0; lp.shield=sp.shield;
+        lp.speedBoost=sp.speedBoost||0;
         lp.ghostTimer=sp.ghostTimer||0; lp.shovelTimer=sp.shovelTimer||0;
         lp.kills=sp.kills||0;
       }
@@ -2394,7 +2398,7 @@ function doRematch(){
   if(!isHost) return;
   document.getElementById('overlay').classList.remove('visible');
   initGameState();
-  const msg={type:'GAME_START',grid:serializeGrid(),players,bombs:[],explosions:[],powerups:[],mode:gameMode};
+  const msg={type:'GAME_START',grid:serializeGrid(),players,bombs:[],explosions:[],powerups:[],mode:gameMode,teamMode,friendlyFire,powerupToggles};
   Object.values(clientConns).forEach(c=>c.send(msg));
   bombs=[];explosions=[];gameOver=false;
   broadcastCountdown(3);
@@ -2669,7 +2673,7 @@ function render(dt){
     ctx.strokeStyle=info.color; ctx.lineWidth=1.5;
     ctx.beginPath(); ctx.arc(px2,py2+bob,CELL*0.32,0,Math.PI*2); ctx.stroke();
     // Icon
-    ctx.font=`${CELL*0.5}px serif`;
+    ctx.font=`${CELL*0.5}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(info.icon,px2,py2+bob);
     ctx.restore();
@@ -2788,7 +2792,7 @@ function render(dt){
 
     // Crown for me
     if(p.id===mySlot){
-      ctx.fillStyle=p.color; ctx.font=`${CELL*0.38}px serif`;
+      ctx.fillStyle=p.color; ctx.font=`${CELL*0.38}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
       ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.fillText('★',px,py-s*1.22);
     }
