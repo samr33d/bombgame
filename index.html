@@ -410,7 +410,41 @@ header {
     <div class="notes-title">📋 RELEASE NOTES</div>
 
     <div class="note-entry">
-      <div class="note-version">v0.9 — LATEST</div>
+      <div class="note-version">v1.2 — LATEST</div>
+      <div class="note-items">
+        Fire-destroyed blocks now drop power-ups at normal rates<br>
+        Music engine rewritten — handles browser autoplay policies with retry/resume<br>
+        Reduced rubber banding for client players (smoother interpolation)<br>
+        Pillars can no longer form inaccessible pockets (reachability check)
+      </div>
+    </div>
+
+    <div class="note-entry">
+      <div class="note-version">v1.1 — FIRE BOMB & DEFUSE</div>
+      <div class="note-items">
+        New power-up: 🔥 Fire Bomb — all bombs spread fire to connected walls for 10s<br>
+        Fire visually ripples outward through walls before destroying them<br>
+        Fire bombs glow orange with a pulsing flame ring<br>
+        New power-up: 🔧 Defuse — walk over enemy bombs to disarm them (10s)<br>
+        Defuse players can pass through solid bombs<br>
+        Defuse only removes enemy bombs, not your own
+      </div>
+    </div>
+
+    <div class="note-entry">
+      <div class="note-version">v1.0 — MAP & PILLARS</div>
+      <div class="note-items">
+        5 symmetrical pillar patterns: grid, diamond, cross, scatter, rings<br>
+        Pillars never placed adjacent to each other<br>
+        More pillars overall (~60-120 per map)<br>
+        Map reduced to 19 rows for tighter gameplay<br>
+        Solid bombs on by default with Bomberman-style passthrough<br>
+        Free-for-all default mode
+      </div>
+    </div>
+
+    <div class="note-entry">
+      <div class="note-version">v0.9</div>
       <div class="note-items">
         Smarter AI: bots hunt all players, seek power-ups, check escape routes before bombing, and avoid hitting teammates in team mode<br>
         Explosion duration tightened (650ms → 400ms) for fairer gameplay<br>
@@ -1182,16 +1216,19 @@ function handleClientReceive(data) {
       if (!lp) return;
       lp.isBot = sp.isBot||false;
       if (sp.id === mySlot) {
-        // Don't overwrite grid/target — client prediction owns those
-        // Only do gentle correction if too far from host position
+        // Client prediction owns position — apply gentle continuous correction
         const hostX = sp.x || (sp.targetC*CELL+CELL/2);
         const hostY = sp.y || (sp.targetR*CELL+CELL/2);
         const drift = Math.abs(lp.x-hostX)+Math.abs(lp.y-hostY);
-        if (drift > CELL*3) {
-          // Snap to host position if way off
+        if (drift > CELL*5) {
+          // Hard snap only if very far off (respawn/desync)
           lp.x=hostX; lp.y=hostY;
           lp.gridR=sp.gridR; lp.gridC=sp.gridC;
           lp.targetR=sp.targetR; lp.targetC=sp.targetC;
+        } else if (drift > CELL*0.5) {
+          // Gentle nudge toward host position (small correction each tick)
+          lp.x = lerp(lp.x, hostX, 0.08);
+          lp.y = lerp(lp.y, hostY, 0.08);
         }
         lp.alive=sp.alive; lp.lives=sp.lives; lp.invincible=sp.invincible?800:0;
         lp.shield=sp.shield; lp.frozen=sp.frozen?500:0;
@@ -1199,10 +1236,10 @@ function handleClientReceive(data) {
         lp.blastRadius=sp.blastRadius; lp.maxBombs=sp.maxBombs;
         lp.kills=sp.kills||0;
       } else {
+        // Other players: store server position as target, interpolate in render loop
+        lp._serverX = sp.x; lp._serverY = sp.y;
         lp.gridR=sp.gridR; lp.gridC=sp.gridC;
         lp.targetR=sp.targetR; lp.targetC=sp.targetC;
-        lp.x = lerp(lp.x, sp.x, 0.45);
-        lp.y = lerp(lp.y, sp.y, 0.45);
         lp.alive=sp.alive; lp.lives=sp.lives; lp.dir=sp.dir;
         lp.walkFrame=sp.walkFrame; lp.invincible=sp.invincible?800:0;
         lp.frozen=sp.frozen?500:0; lp.shield=sp.shield;
@@ -1367,11 +1404,93 @@ function generateMap() {
     if (!spawnCells.has(key)) grid[r][c]=1;
   });
 
+  // Verify all open tiles are reachable from spawn — remove pillars that create pockets
+  ensureReachability(spawnCells);
+
   // Place destructible walls
   for (let r=1;r<ROWS-1;r++) {
     for (let c=1;c<COLS-1;c++) {
       if (grid[r][c]===0 && !spawnCells.has(`${r},${c}`) && Math.random()<0.38) {
         grid[r][c]=2;
+      }
+    }
+  }
+}
+
+function ensureReachability(spawnCells) {
+  // BFS from first spawn to find all reachable open tiles (treating destructibles as passable since they can be broken)
+  const spawns = getSpawnPositions();
+  const start = spawns[0];
+  const reachable = new Set();
+  const queue = [{r:start.r, c:start.c}];
+  reachable.add(`${start.r},${start.c}`);
+
+  while(queue.length > 0) {
+    const cur = queue.shift();
+    for(const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nr=cur.r+dr, nc=cur.c+dc;
+      const key=`${nr},${nc}`;
+      if(reachable.has(key)) continue;
+      if(nr<1||nr>=ROWS-1||nc<1||nc>=COLS-1) continue;
+      if(grid[nr][nc]===1) continue; // permanent wall or pillar blocks
+      reachable.add(key);
+      queue.push({r:nr,c:nc});
+    }
+  }
+
+  // Find all open tiles (grid===0) that are NOT reachable
+  const unreachable = [];
+  for(let r=1;r<ROWS-1;r++) {
+    for(let c=1;c<COLS-1;c++) {
+      if(grid[r][c]===0 && !reachable.has(`${r},${c}`)) {
+        unreachable.push({r,c});
+      }
+    }
+  }
+
+  // For each unreachable tile, remove adjacent pillars until it becomes reachable
+  if(unreachable.length > 0) {
+    // Find all pillars (non-border walls placed by us)
+    for(const tile of unreachable) {
+      // Remove the nearest pillar that would open a path
+      for(const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const pr=tile.r+dr, pc=tile.c+dc;
+        if(pr<1||pr>=ROWS-1||pc<1||pc>=COLS-1) continue;
+        // Only remove pillars we placed (even row+even col are original grid pillars in old system, but now all interior walls=1 are our pillars)
+        // Border walls: r===0||r===ROWS-1||c===0||c===COLS-1 — don't touch
+        if(grid[pr][pc]===1) {
+          grid[pr][pc]=0;
+          break; // removing one adjacent pillar should open the pocket
+        }
+      }
+    }
+
+    // Re-verify — if still unreachable pockets, do another pass (rare)
+    const recheck = new Set();
+    const q2 = [{r:spawns[0].r, c:spawns[0].c}];
+    recheck.add(`${spawns[0].r},${spawns[0].c}`);
+    while(q2.length > 0) {
+      const cur = q2.shift();
+      for(const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const nr=cur.r+dr, nc=cur.c+dc;
+        const key=`${nr},${nc}`;
+        if(recheck.has(key)) continue;
+        if(nr<1||nr>=ROWS-1||nc<1||nc>=COLS-1) continue;
+        if(grid[nr][nc]===1) continue;
+        recheck.add(key);
+        q2.push({r:nr,c:nc});
+      }
+    }
+    // Last resort: remove any remaining blocking pillars
+    for(let r=1;r<ROWS-1;r++) {
+      for(let c=1;c<COLS-1;c++) {
+        if(grid[r][c]===0 && !recheck.has(`${r},${c}`)) {
+          // This tile is still trapped — remove ALL adjacent pillars
+          for(const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+            const pr=r+dr, pc=c+dc;
+            if(pr>=1&&pr<ROWS-1&&pc>=1&&pc<COLS-1&&grid[pr][pc]===1) grid[pr][pc]=0;
+          }
+        }
       }
     }
   }
@@ -2255,7 +2374,7 @@ function explodeBomb(bomb){
         // Destroy the wall
         grid[r2][c2]=0;
         pendingGridChanges.push({r:r2,c:c2,v:0});
-        if(!bomb.fire && Math.random()<0.25) spawnPowerupAt(r2,c2);
+        if(Math.random()<0.25) spawnPowerupAt(r2,c2);
         break;
       }
     }
@@ -2730,6 +2849,17 @@ function renderLoop(ts){
         clientPredictMe(me,dt);
       }
     }
+    // Smooth interpolation for other players on client
+    if(!isHost) {
+      const lerpSpeed = 1 - Math.pow(0.02, dt/16); // ~0.15 per frame at 60fps, smooth
+      players.forEach(p => {
+        if(p.id===mySlot || !p.alive) return;
+        if(p._serverX!==undefined) {
+          p.x = lerp(p.x, p._serverX, lerpSpeed);
+          p.y = lerp(p.y, p._serverY, lerpSpeed);
+        }
+      });
+    }
   }
 
   simParticles(dt);
@@ -3196,6 +3326,7 @@ document.addEventListener('touchend',e=>{
 // CHIPTUNE MUSIC ENGINE
 var Music=(function(){
 var actx=null,playing=null,nodes=[],ltimers=[],mg=null,VOL=0.04,muted=false;
+var _pendingPlay=null;
 
 function getCtx(){
   if(!actx || actx.state==='closed') {
@@ -3204,20 +3335,30 @@ function getCtx(){
     mg.gain.value=muted?0:VOL;
     mg.connect(actx.destination);
   }
-  // Always try to resume — browsers suspend contexts created outside gestures
-  if(actx.state==='suspended') {
-    actx.resume().catch(function(){});
-  }
   return actx;
 }
 
-// Global interaction listener — resumes audio on any user tap/click
+function tryResume(){
+  if(!actx) return;
+  if(actx.state==='suspended'){
+    actx.resume().then(function(){
+      // If we had a pending play, fire it now
+      if(_pendingPlay){
+        var fn=_pendingPlay;
+        _pendingPlay=null;
+        fn();
+      }
+    }).catch(function(){});
+  }
+}
+
+// Global interaction listeners — resume audio on any user interaction
 var resumeListenerAdded=false;
 function addResumeListener(){
   if(resumeListenerAdded) return;
   resumeListenerAdded=true;
   var handler=function(){
-    if(actx && actx.state==='suspended') actx.resume().catch(function(){});
+    tryResume();
   };
   document.addEventListener('click',handler,{capture:true,passive:true});
   document.addEventListener('touchstart',handler,{capture:true,passive:true});
@@ -3225,6 +3366,7 @@ function addResumeListener(){
 }
 
 function stop(){
+  _pendingPlay=null;
   ltimers.forEach(function(id){clearTimeout(id)});ltimers=[];
   nodes.forEach(function(n){try{n.stop()}catch(e){}try{n.disconnect()}catch(e){}});
   nodes=[];playing=null;
@@ -3233,8 +3375,8 @@ function stop(){
 function NT(nm,oc){var s={C:0,"C#":1,D:2,"D#":3,E:4,F:5,"F#":6,G:7,"G#":8,A:9,"A#":10,B:11};return 440*Math.pow(2,(s[nm]+(oc-4)*12-9)/12);}
 
 function os(type,freq,start,dur,vol,det){
-  var a=getCtx();
-  var o=a.createOscillator(),g=a.createGain();
+  if(!actx||actx.state==='closed') return;
+  var o=actx.createOscillator(),g=actx.createGain();
   o.type=type;o.frequency.value=freq;if(det)o.detune.value=det;
   g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(vol||0.3,start+0.01);
   g.gain.setValueAtTime(vol||0.3,start+dur-0.03);g.gain.linearRampToValueAtTime(0,start+dur);
@@ -3242,28 +3384,25 @@ function os(type,freq,start,dur,vol,det){
 }
 
 function nz(start,dur,vol){
-  var a=getCtx();
-  var len=Math.max(1,a.sampleRate*dur|0);var buf=a.createBuffer(1,len,a.sampleRate);
+  if(!actx||actx.state==='closed') return;
+  var len=Math.max(1,actx.sampleRate*dur|0);var buf=actx.createBuffer(1,len,actx.sampleRate);
   var d=buf.getChannelData(0);for(var i=0;i<d.length;i++)d[i]=Math.random()*2-1;
-  var src=a.createBufferSource();src.buffer=buf;var g=a.createGain();
-  var f=a.createBiquadFilter();f.type="highpass";f.frequency.value=6000;
+  var src=actx.createBufferSource();src.buffer=buf;var g=actx.createGain();
+  var f=actx.createBiquadFilter();f.type="highpass";f.frequency.value=6000;
   g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(vol||0.05,start+0.005);
   g.gain.setValueAtTime(vol||0.05,start+dur*0.7);g.gain.linearRampToValueAtTime(0,start+dur);
   src.connect(f);f.connect(g);g.connect(mg);src.start(start);src.stop(start+dur+0.05);nodes.push(src,g,f);
 }
 
-function playGame(){
-  stop();
-  var a=getCtx();
+function doPlayGame(){
+  // Clean up old nodes
+  nodes=nodes.filter(function(n){try{if(n.playbackState===3||n.context.state==='closed')return false}catch(e){}return true});
   playing="game";
   var BPM=150,beat=60/BPM,bar=beat*4,loopLen=bar*8;
   function sched(){
-    if(playing!=="game")return;
-    var a2=getCtx();
-    if(!a2||a2.state==='closed')return;
-    // Clean up old finished nodes to prevent memory leak
-    nodes=nodes.filter(function(n){try{return n.context&&n.context.state!=='closed'}catch(e){return false}});
-    var now=a2.currentTime+0.05;
+    if(playing!=="game"||!actx||actx.state==='closed')return;
+    if(actx.state==='suspended'){tryResume();ltimers.push(setTimeout(sched,200));return;}
+    var now=actx.currentTime+0.05;
     var bass="AAAAAAAAAAAAAAAAFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDDDEEEEEEEEEEEEEEEE".split("");
     bass.forEach(function(n,i){var t=now+i*(beat/2);os("sawtooth",NT(n,2),t,beat/2-0.02,i%4===0?0.35:0.2);});
     for(var i=0;i<32;i++){var t=now+i*(beat/2);nz(t,0.04,0.06);if(i%4===0){os("square",55,t,0.1,0.25);os("square",40,t+0.01,0.08,0.15);}if(i%4===2){nz(t,0.1,0.12);os("square",180,t,0.05,0.08);}}
@@ -3276,20 +3415,51 @@ function playGame(){
   sched();
 }
 
+function playGame(){
+  stop();
+  getCtx();
+  if(actx.state==='running'){
+    doPlayGame();
+  } else {
+    // Context suspended — queue playback for when it resumes
+    _pendingPlay=doPlayGame;
+    tryResume();
+    // Also retry in a moment in case resume works with a delay
+    ltimers.push(setTimeout(function(){
+      if(_pendingPlay && actx && actx.state==='running'){
+        var fn=_pendingPlay;_pendingPlay=null;fn();
+      }
+    },300));
+    ltimers.push(setTimeout(function(){
+      if(_pendingPlay && actx && actx.state==='running'){
+        var fn=_pendingPlay;_pendingPlay=null;fn();
+      }
+    },1000));
+  }
+}
+
 function playVictory(){
   stop();
-  var a=getCtx();
-  playing="victory";
-  var now=a.currentTime+0.05,BPM=140,beat=60/BPM;
-  var fan=[["C",5,.5],["E",5,.5],["G",5,.5],["C",6,1],["B",5,.25],["C",6,.25],["B",5,.25],["C",6,.75],["G",5,.5],["E",5,.5],["G",5,.5],["C",6,1.5]];
-  var t=0;fan.forEach(function(m){var st=now+t*beat;os("square",NT(m[0],m[1]),st,m[2]*beat-0.02,0.15,4);os("triangle",NT(m[0],m[1]-1),st,m[2]*beat-0.02,0.08);t+=m[2];});
-  [[0,"C",3,1],[2,"G",2,1],[3,"C",3,.5],[3.5,"E",3,.5],[4,"C",3,2]].forEach(function(b){os("sawtooth",NT(b[1],b[2]),now+b[0]*beat,b[3]*beat-0.02,0.2);});
-  for(var i=0;i<4;i++)nz(now+i*beat,0.06,0.08);nz(now+4*beat,0.4,0.1);
-  ["C","E","G","C","E","G","C","E"].forEach(function(n,i){os("triangle",NT(n,4+Math.floor(i/3)),now+(5+i*0.12)*beat,0.3,0.07);});
+  getCtx();
+  function doVictory(){
+    playing="victory";
+    var now=actx.currentTime+0.05,BPM=140,beat=60/BPM;
+    var fan=[["C",5,.5],["E",5,.5],["G",5,.5],["C",6,1],["B",5,.25],["C",6,.25],["B",5,.25],["C",6,.75],["G",5,.5],["E",5,.5],["G",5,.5],["C",6,1.5]];
+    var t=0;fan.forEach(function(m){var st=now+t*beat;os("square",NT(m[0],m[1]),st,m[2]*beat-0.02,0.15,4);os("triangle",NT(m[0],m[1]-1),st,m[2]*beat-0.02,0.08);t+=m[2];});
+    [[0,"C",3,1],[2,"G",2,1],[3,"C",3,.5],[3.5,"E",3,.5],[4,"C",3,2]].forEach(function(b){os("sawtooth",NT(b[1],b[2]),now+b[0]*beat,b[3]*beat-0.02,0.2);});
+    for(var i=0;i<4;i++)nz(now+i*beat,0.06,0.08);nz(now+4*beat,0.4,0.1);
+    ["C","E","G","C","E","G","C","E"].forEach(function(n,i){os("triangle",NT(n,4+Math.floor(i/3)),now+(5+i*0.12)*beat,0.3,0.07);});
+  }
+  if(actx.state==='running'){
+    doVictory();
+  } else {
+    _pendingPlay=doVictory;
+    tryResume();
+  }
 }
 
 function toggleMute(){muted=!muted;if(mg)mg.gain.value=muted?0:VOL;return muted;}
-function warmUp(){getCtx();addResumeListener();}
+function warmUp(){getCtx();tryResume();addResumeListener();}
 function init(){}
 return{playGame:playGame,playVictory:playVictory,stop:stop,init:init,toggleMute:toggleMute,warmUp:warmUp};
 })();
